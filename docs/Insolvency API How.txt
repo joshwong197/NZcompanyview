@@ -1,0 +1,46 @@
+Getting data from the registers
+It is strongly recommended that you use the name/number search criteria to get current details on demand directly from the insolvency registers, rather than maintaining your own database of insolvency information.
+
+If you do store your own database of insolvency data then the onus is on you to ensure the data kept in your database complies with the Privacy Act and insolvency legislation.
+
+Search criteria
+The API can accept several search parameters and will return the public details of insolvency cases that match the search criteria.
+
+Estate number or partial estate number
+
+Name or partial name
+
+NZBN
+
+Date range (refer to section below)
+
+This removes the need for API consumers to store and maintain their own database of insolvency records as searches can be run on demand against the insolvency registers to retrieve the current authoritative data.
+
+The GET /insolvencies/{estate-id} operation may be used to retrieve current details for a specified insolvency record.
+
+Searching by date range
+Best practice use of the API is to use the name or number searching to find current information from the insolvency registers. However the API still retains the date range search parameters used by previous Insolvency Register services, primarily to support customers using software products originally built using those historic services. In this situation an API user stores their own database of insolvency information which is kept current by polling the API for updates in a date range, typically on a daily basis. 
+
+Estate removals and corrections
+MBIE and the Privacy Commission consider the best protection against accidental disclosure or misuse of private information is to avoid holding data where not necessary. The Insolvency Register API has been built with the express intent of enabling consumers to integrate it into their applications directly, and avoid the need to store private data.
+
+If you do need to hold your own copy of the data to support legacy software systems then you must use the GET /insolvencies/removalorcorrections operation on at least a daily basis to ensure you are aware of data that must be removed and take action to update your database. 
+
+The API operation will return the estate number for any insolvency records that are discharged, completed, or suppressed in a specified period. There is no active notification by email or other means to API consumers when an estate needs to be corrected or removed from their records.
+
+Duration of insolvency records
+Insolvency records may only be used or displayed for a maximum period of (as applicable):
+
+Four years from the date of discharge from bankruptcy;
+
+Four years from the date of discharge from a no asset procedure; or
+
+Five years from the date of a debt repayment order.
+
+Exceptions to these time restrictions are:
+
+information about a person who is or has been bankrupt on two or more occasions; or
+
+information about a person who is or has been bankrupt and discharged from the no asset procedure, provided that such information is used or displayed in a manner consistent with the Insolvency Register. 
+
+There are also situations where estates or addresses are suppressed or corrected and must be immediately removed.

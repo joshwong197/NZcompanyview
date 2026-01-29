@@ -1,0 +1,1166 @@
+{
+    "openapi": "3.0.1",
+    "info": {
+        "title": "Insolvency Register",
+        "description": "The Insolvency Register API allows authorised users to retrieve information from public [insolvency and debt repayment order registers](http://www.insolvency.govt.nz/).\n\nSee [here](/api/insolvency-register) for additional information on how to use the API.\n",
+        "version": "v5"
+    },
+    "servers": [
+        {
+            "url": "https://api.business.govt.nz/gateway/insolvency-trustee-services/v5"
+        },
+        {
+            "url": "https://api.int.mbie.govt.nz/gateway/insolvency-trustee-services/v5"
+        },
+        {
+            "url": "https://apim.api.int.mbie.govt.nz/gateway/insolvency-trustee-services/v5"
+        }
+    ],
+    "paths": {
+        "/insolvencies/{estate-id}": {
+            "get": {
+                "tags": [
+                    "RegisterSearch"
+                ],
+                "summary": "Returns the public information for the estate of a personal insolvency or liquidation",
+                "description": "### Overview\n  Returns the public information for the estate of a personal or company insolvency\n\n  ____\n  ### Pre-conditions\n  * API user is authenticated\n  ____\n  ### Post-conditions\n  * Insolvency record is returned\n\n  ### HATEOAS \"links\" element examples\n  | Case \\# | Case | Description / rules |\n  |----|-----|------|\n  | **1** | **200: OK** | Self |\n\n  ____\n  ### SOAP Mapping\n  | SOAP XML object| Description|\n  |----|------|\n  | personalInsolvencyDetail |  Close but not exact mapping |\n  | companyInsolvencyDetail |  Close but not exact mapping |\n",
+                "operationId": "getInsolvencyDetail",
+                "parameters": [
+                    {
+                        "name": "estate-id",
+                        "in": "path",
+                        "description": "Format - int64. * The unique identifier for the estate.\n",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The get result for a given estate-id.",
+                        "headers": {
+                            "api-business-govt-nz-Request-Id": {
+                                "description": "MBIE Request id header",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            },
+                            "api-business-govt-nz-Correlation-Id": {
+                                "description": "MBIE Correlation id header",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            },
+                            "date": {
+                                "description": "Response parameter. Date/time the response was generated (in Greenwich mean time).",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            },
+                            "service-version": {
+                                "description": "The minor version of the API.",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request."
+                    },
+                    "401": {
+                        "description": "The requester is not authenticated."
+                    },
+                    "403": {
+                        "description": "The requester is not authorised to perform this operation."
+                    },
+                    "404": {
+                        "description": "Resource not found."
+                    },
+                    "500": {
+                        "description": "An unexpected internal server error occurred."
+                    }
+                }
+            }
+        },
+        "/insolvencies": {
+            "get": {
+                "tags": [
+                    "RegisterSearch"
+                ],
+                "summary": "Public search for an insolvent estate",
+                "description": "**Search the public register for an insolvent estate\n\n* Only public data is returned\n",
+                "operationId": "searchInsolventEstatesPublic",
+                "parameters": [
+                    {
+                        "name": "estate-number",
+                        "in": "query",
+                        "description": "* Number or part number of the estate. Estate-number is the unique primary id.\n",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "insolvencyTypeDescription",
+                        "in": "query",
+                        "description": "Enum, one of;\n  - Creditor Application\n  - Debtor Application\n  - No Asset Procedure\n  - Partnership\n  - Insolvent Deceased Estate\n  - Bankrupt Agency\n  - Debt Repayment Order\n  - Receiver Manager (Bankrupt)\n  - Voluntary Liquidation\n  - Court Liquidation\n  - Voluntary Administration\n  - Interim Liquidation\n  - Liquidation Agency\n  - Criminal Asset Management\n",
+                        "schema": {
+                            "enum": [
+                                "Creditor Application",
+                                "Debtor Application",
+                                "No Asset Procedure",
+                                "Partnership",
+                                "Insolvent Deceased Estate",
+                                "Bankrupt Agency",
+                                "Debt Repayment Order",
+                                "Receiver Manager (Bankrupt)",
+                                "Voluntary Liquidation",
+                                "Court Liquidation",
+                                "Voluntary Administration",
+                                "Interim Liquidation",
+                                "Liquidation Agency",
+                                "Criminal Asset Management"
+                            ],
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "name",
+                        "in": "query",
+                        "description": "* Name or part name of the person / company.\n",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "nzbn",
+                        "in": "query",
+                        "description": "* NZBN number or part NZBN number for the insolvent party.\n",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "register",
+                        "in": "query",
+                        "description": "* Specify search against either DRO or Insolvency register\n",
+                        "schema": {
+                            "enum": [
+                                "DRO",
+                                "Insolvency"
+                            ],
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "date-from",
+                        "in": "query",
+                        "description": "* Format = YYYY-MM-DD\nadjudication date from\n",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "date-to",
+                        "in": "query",
+                        "description": "* End date search range for insolvencies. Effect of not specifying will be to \"default\" to today. * Format = YYYY-MM-DD adjudication date to\n",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "The page in the collection to return. Default is page 1.",
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "page-size",
+                        "in": "query",
+                        "description": "The requested number of items to include in each page returned.\nDefault is 20.\n",
+                        "schema": {
+                            "type": "integer",
+                            "default": 1000
+                        }
+                    },
+                    {
+                        "name": "sort-order",
+                        "in": "query",
+                        "description": "The order to sort the collection in. Can be 'ASC' or 'DESC'.",
+                        "schema": {
+                            "enum": [
+                                "ASC",
+                                "DESC"
+                            ],
+                            "type": "string",
+                            "default": "ASC"
+                        }
+                    },
+                    {
+                        "name": "sort-by",
+                        "in": "query",
+                        "description": "The property to sort the collection by.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The search results for the given provider search parameters.",
+                        "headers": {
+                            "api-business-govt-nz-Request-Id": {
+                                "description": "MBIE Request id header",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            },
+                            "api-business-govt-nz-Correlation-Id": {
+                                "description": "MBIE Correlation id header",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            },
+                            "date": {
+                                "description": "Response parameter. Date/time the response was generated (in Greenwich mean time).",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            },
+                            "service-version": {
+                                "description": "The minor version of the API.",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/InsolvenciesSearchResults"
+                                },
+                                "example": {
+                                    "sortBy": "name",
+                                    "page": 1,
+                                    "sortOrder": "ASC",
+                                    "totalItems": 42,
+                                    "pageSize": 20,
+                                    "totalPages": 13,
+                                    "searchCriteria": "estate-number:48518441, name:Jim Jimmers, register:Insolvency",
+                                    "searchResults": [
+                                        {
+                                            "estateNumber": 136813,
+                                            "estateName": "string",
+                                            "nzbn": "string",
+                                            "adjudicationOrLiquidationDate": "2017-08-30",
+                                            "insolvencyTypeDescription": "Creditor Application",
+                                            "multipleInsolvencies": false,
+                                            "addressAtAdjudication": "string",
+                                            "insolvencyStatus": "Current Bankrupt",
+                                            "officer": "string",
+                                            "alternateNames": [
+                                                "Example Limited"
+                                            ],
+                                            "links": [
+                                                {
+                                                    "rel": "self",
+                                                    "href": "http://api.business.govt.nz/v1/insolvency/",
+                                                    "method": "GET",
+                                                    "action": "string"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "The combination of search enquiry parameters is invalid.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorDescription"
+                                },
+                                "example": {
+                                    "errorMessage": "Request failed",
+                                    "errorCode": "E022",
+                                    "errorDescription": "An unexpected error occurred servicing the request.",
+                                    "fields": [
+                                        {
+                                            "name": "string",
+                                            "error": "string"
+                                        }
+                                    ],
+                                    "help": "http://app.insolvency.govt.nz/developer/help/E022"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "The requester is not authenticated.",
+                        "content": {
+                            "application/json": {}
+                        }
+                    },
+                    "403": {
+                        "description": "The requester is not authorised for this operation.",
+                        "content": {
+                            "application/json": {}
+                        }
+                    },
+                    "500": {
+                        "description": "An unexpected internal server error occurred.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorDescription"
+                                },
+                                "example": {
+                                    "errorMessage": "Request failed",
+                                    "errorCode": "E022",
+                                    "errorDescription": "An unexpected error occurred servicing the request.",
+                                    "fields": [
+                                        {
+                                            "name": "string",
+                                            "error": "string"
+                                        }
+                                    ],
+                                    "help": "http://app.insolvency.govt.nz/developer/help/E022"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/insolvencies/removalorcorrections": {
+            "get": {
+                "tags": [
+                    "Removals"
+                ],
+                "summary": "Public search for an insolvent records to be removed from the register",
+                "description": "**All the records that have been removed from the register within a specific time period.\n\n* Deliberately only provides EstateIds / resource links so as to avoid unintentionally becoming a second register of removed insolvent estates.\n\n* Only public data should is returned\n",
+                "operationId": "getInsolvencyRemovalOrCorrections",
+                "parameters": [
+                    {
+                        "name": "date-from",
+                        "in": "query",
+                        "description": "* Date search range to list removals from. Set this to the last time it was called by the API user. The purpose is to give a slice of insolvencies that need to be removed since the last time this operation was called.\n* Format = YYYY-MM-DD\n",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "date-to",
+                        "in": "query",
+                        "description": "* Date search range to list removals to. In effect \"defaults\" to today if not specified. If specified, cannot be more than 3 months from date-from.\n* Format =  YYYY-MM-DD\n",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "The page in the collection to return. Default is page 1.",
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "page-size",
+                        "in": "query",
+                        "description": "The requested number of items to include in each page returned.\nDefault is 1000.\n",
+                        "schema": {
+                            "type": "integer",
+                            "default": 1000
+                        }
+                    },
+                    {
+                        "name": "sort-order",
+                        "in": "query",
+                        "description": "The order to sort the collection in. Can be 'ASC' or 'DESC'.",
+                        "schema": {
+                            "enum": [
+                                "ASC",
+                                "DESC"
+                            ],
+                            "type": "string",
+                            "default": "ASC"
+                        }
+                    },
+                    {
+                        "name": "sort-by",
+                        "in": "query",
+                        "description": "The property to sort the collection by e.g. estateNumber or estateName",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The search results for the given provider search parameters.",
+                        "headers": {
+                            "api-business-govt-nz-Request-Id": {
+                                "description": "MBIE Request id header",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            },
+                            "api-business-govt-nz-Correlation-Id": {
+                                "description": "MBIE Correlation id header",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            },
+                            "date": {
+                                "description": "Response parameter. Date/time the response was generated (in Greenwich mean time).",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            },
+                            "service-version": {
+                                "description": "The minor version of the API.",
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RemovedOrCorrectedInsolvenciesResults"
+                                },
+                                "example": {
+                                    "sortBy": "name",
+                                    "page": 1,
+                                    "sortOrder": "ASC",
+                                    "totalItems": 42,
+                                    "pageSize": 20,
+                                    "totalPages": 13,
+                                    "searchCriteria": "date-from:2019-07-31, date-to:2019-08-31",
+                                    "removedOrCorrectedInsolvencies": [
+                                        {
+                                            "estateNumber": 136813,
+                                            "estateName": "string",
+                                            "organisationName": "ACB-ZXE Limited",
+                                            "created": "1969-08-30",
+                                            "nzbn": "string",
+                                            "companyNumber": "string",
+                                            "monthOfBirth": 3,
+                                            "yearOfBirth": 1978,
+                                            "employmentStatusAtAdjudication": "Employed",
+                                            "partneredEstates": [
+                                                {
+                                                    "href": "http://api.business.govt.nz/services/v4/insolvency-trustee-services/insolvency/48518441",
+                                                    "estateNumber": 48518441
+                                                }
+                                            ],
+                                            "adjudicationOrLiquidationDate": "2017-08-30",
+                                            "insolvencyTypeDescription": "Creditor Application",
+                                            "multipleInsolvencies": false,
+                                            "tradingNames": [
+                                                "Acme Limited"
+                                            ],
+                                            "alternateNames": [
+                                                "Example Limited"
+                                            ],
+                                            "occupationAtAdjudicationOrIndustryAtLiquidation": "Builder",
+                                            "addressAtAdjudication": "string",
+                                            "insolvencyStatus": "string",
+                                            "removedDate": "string",
+                                            "courtName": "Auckland District Court",
+                                            "dischargeOrCompletionDate": "2020-08-30",
+                                            "dischargeSuspended": true,
+                                            "dischargeOrCompletionConditions": "Example completion condition text",
+                                            "dischargeConditionExpiryDate": "2002-11-30",
+                                            "officeForEnquiries": "string",
+                                            "currentAddresses": [
+                                                {
+                                                    "streetNumber": "5A",
+                                                    "streetName": "Evergreen Rise",
+                                                    "suburb": "New Lynn",
+                                                    "city": "Auckland",
+                                                    "postcode": 621,
+                                                    "country": "New Zealand"
+                                                }
+                                            ],
+                                            "dischargeOrCompletionType": "PERSONAL_AUTOMATIC_DISCHARGE",
+                                            "annulmentDate": "2020-11-30",
+                                            "href": "http://api.business.govt.nz/services/v4/insolvency-trustee-services/insolvency/48518441",
+                                            "droSupervisor": {
+                                                "name": "string",
+                                                "email": "string",
+                                                "phone": "string"
+                                            },
+                                            "links": [
+                                                {
+                                                    "rel": "self",
+                                                    "href": "http://api.business.govt.nz/v1/insolvency/",
+                                                    "method": "GET",
+                                                    "action": "string"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "The combination of search enquiry parameters is invalid.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorDescription"
+                                },
+                                "example": {
+                                    "errorMessage": "Request failed",
+                                    "errorCode": "E022",
+                                    "errorDescription": "An unexpected error occurred servicing the request.",
+                                    "fields": [
+                                        {
+                                            "name": "string",
+                                            "error": "string"
+                                        }
+                                    ],
+                                    "help": "http://app.insolvency.govt.nz/developer/help/E022"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "The requester is not authenticated.",
+                        "content": {
+                            "application/json": {}
+                        }
+                    },
+                    "403": {
+                        "description": "The requester is not authorised for this operation.",
+                        "content": {
+                            "application/json": {}
+                        }
+                    },
+                    "500": {
+                        "description": "An unexpected internal server error occurred.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorDescription"
+                                },
+                                "example": {
+                                    "errorMessage": "Request failed",
+                                    "errorCode": "E022",
+                                    "errorDescription": "An unexpected error occurred servicing the request.",
+                                    "fields": [
+                                        {
+                                            "name": "string",
+                                            "error": "string"
+                                        }
+                                    ],
+                                    "help": "http://app.insolvency.govt.nz/developer/help/E022"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "InsolvenciesRecord": {
+                "type": "object",
+                "properties": {
+                    "estateNumber": {
+                        "type": "integer",
+                        "description": "The primary identifier for the insolvency record.\nLegacyAPIMapping - baseInsolvencyDetail.insolvencyNumber\n",
+                        "format": "int64",
+                        "example": 136813
+                    },
+                    "estateName": {
+                        "type": "string",
+                        "description": "The name of the insolvent party. LegacyAPIMapping - personalInsolvencyDetail.debtorName\n"
+                    },
+                    "organisationName": {
+                        "type": "string",
+                        "description": "If the party is NOT human, the name of the organisation / company.",
+                        "example": "ACB-ZXE Limited"
+                    },
+                    "created": {
+                        "type": "string",
+                        "description": "Date created (Personal) or Liquidation (Company)\nLegacyAPIMapping - baseInsolvencyDetail.date\n",
+                        "format": "date",
+                        "example": "1969-08-30"
+                    },
+                    "nzbn": {
+                        "type": "string",
+                        "description": "The NZBN of the insolvent party if known.\nLegacyAPIMapping - new\n"
+                    },
+                    "companyNumber": {
+                        "type": "string",
+                        "description": "The Company number of the insolvent party.\nLegacyAPIMapping - baseInsolvencyDetail.companyNumber\n"
+                    },
+                    "monthOfBirth": {
+                        "type": "integer",
+                        "description": "The month the insolvent party was born.\nLegacyAPIMapping - personalInsolvencyDetail.monthOfBirth\n",
+                        "example": 3
+                    },
+                    "yearOfBirth": {
+                        "type": "integer",
+                        "description": "The year the insolvent party was born.\nLegacyAPIMapping - personalInsolvencyDetail.yearOfBirth\n",
+                        "example": 1978
+                    },
+                    "employmentStatusAtAdjudication": {
+                        "type": "string",
+                        "description": "The employment status at the time the insolvency was adjudicated.\nLegacyAPIMapping - personalInsolvencyDetail.employmentStatusAtAdjudication.\n",
+                        "example": "Employed"
+                    },
+                    "partneredEstates": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/EstateLink"
+                        },
+                        "description": "A list of links to estates related to this insolvency.\nLegacyAPIMapping - baseInsolvencyDetail.partneredEstates\n"
+                    },
+                    "adjudicationOrLiquidationDate": {
+                        "type": "string",
+                        "description": "Date adjudicated (Personal) or Liquidation (Company)\nLegacyAPIMapping - baseInsolvencyDetail.adjudicationDateTime\n",
+                        "format": "date",
+                        "example": "2017-08-30"
+                    },
+                    "insolvencyTypeDescription": {
+                        "enum": [
+                            "Creditor Application",
+                            "Debtor Application",
+                            "No Asset Procedure",
+                            "Partnership",
+                            "Insolvent Deceased Estate",
+                            "Debt Repayment Order",
+                            "Receiver Manager (Bankrupt)",
+                            "Voluntary Liquidation",
+                            "Court Liquidation",
+                            "Voluntary Administration",
+                            "Interim Liquidation"
+                        ],
+                        "type": "string",
+                        "description": "Public-facing version of insolvency type. Only applies to public insolvency types.\nLegacyAPIMapping - baseInsolvencyDetail.insolvencyType"
+                    },
+                    "multipleInsolvencies": {
+                        "type": "boolean",
+                        "description": "Indicates that the debtor has had multiple insolvencies.\nLegacyAPIMapping - baseInsolvencyDetail.multipleInsolvencies\n",
+                        "example": false
+                    },
+                    "tradingNames": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "example": "Acme Limited"
+                        },
+                        "description": "Trading names of the estate.\nLegacyAPIMapping - activeInsolvencyDetail.tradingNames\n"
+                    },
+                    "alternateNames": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/NameRecord"
+                        },
+                        "description": "Alternate names of the estate.\nLegacyAPIMapping - activeInsolvencyDetail.alternateNames\n"
+                    },
+                    "occupationAtAdjudicationOrIndustryAtLiquidation": {
+                        "type": "string",
+                        "description": "The occuption of the insolvent at the time of adjudication.\nLegacyAPIMapping - activeInsolvencyDetail.occupationAtAdjudication",
+                        "example": "Builder"
+                    },
+                    "addressAtAdjudication": {
+                        "type": "string",
+                        "description": "The address of the insolvent at the time of adjudication\nLegacyAPIMapping - activeInsolvencyDetail.addressAtAdjudication"
+                    },
+                    "insolvencyStatus": {
+                        "type": "string",
+                        "description": "Public-facing version of insolvency status - actaully discharge status.\nLegacyAPIMapping - activeInsolvencyDetail.insolvencyStatus\nCurrently Bankrupt/NAP (Conditional) Discharged Annulled Currently In Liquidation Completed Liquidation Terminated\nIn addition \"Current\" for DRO, \"Removed\" to indicate removed insolvency.\n"
+                    },
+                    "removedDate": {
+                        "type": "string",
+                        "description": "The date when the insolvency was removed, applicable only when insolvencyStatus is Removed.",
+                        "format": "date-time"
+                    },
+                    "courtName": {
+                        "type": "string",
+                        "description": "Name of court\nLegacyAPIMapping - activeInsolvencyDetail.court\n",
+                        "example": "Auckland District Court"
+                    },
+                    "dischargeOrCompletionDate": {
+                        "type": "string",
+                        "description": "Discharge date (for Personal insolvencies) or Completion date (for Company insolvencies)\nLegacyAPIMapping - activeInsolvencyDetail.dischargeDate",
+                        "format": "date",
+                        "example": "2020-08-30"
+                    },
+                    "dischargeSuspended": {
+                        "type": "boolean",
+                        "description": "Indicates if the discharge has been suspended.\nLegacyAPIMapping - activeInsolvencyDetail.dischargeSuspended",
+                        "example": true
+                    },
+                    "dischargeOrCompletionConditions": {
+                        "type": "string",
+                        "description": "Discharge conditions (for Personal insolvencies) or Completion conditions (for Company insolvencies)\nLegacyAPIMapping - activeInsolvencyDetail.dischargeConditions",
+                        "example": "Example completion condition text"
+                    },
+                    "dischargeConditionExpiryDate": {
+                        "type": "string",
+                        "description": "Conditions expiry date\nLegacyAPIMapping - activeInsolvencyDetail.dischargeConditionExpiry\n",
+                        "format": "date",
+                        "example": "2002-11-30"
+                    },
+                    "officeForEnquiries": {
+                        "type": "string",
+                        "description": "Office for enquiries\nLegacyAPIMapping - activeInsolvencyDetail.officeType\n"
+                    },
+                    "currentAddresses": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AddressRecord"
+                        },
+                        "description": "For NAP, DRO or Debtor Application only, if supplied address from the contact record exists then this is used, otherwise the adjudication address in the estate record is used. For all other estate types, the adjudication address from the estate record is always used.\nLegacyAPIMapping - activeInsolvencyDetail.currentAddresses\n"
+                    },
+                    "dischargeOrCompletionType": {
+                        "enum": [
+                            "PERSONAL_AUTOMATIC_DISCHARGE",
+                            "PERSONAL_CONDITIONAL_DISCHARGE",
+                            "PERSONAL_DISCHARGED",
+                            "PERSONAL_EARLY_DISCHARGE",
+                            "PERSONAL_NAP_DISCHARGED",
+                            "PERSONAL_NAP_TERMINATED",
+                            "PERSONAL_ANNULLED_S1191A",
+                            "PERSONAL_ANNULLED_S1191B",
+                            "PERSONAL_ANNULLED_S1191C",
+                            "PERSONAL_ANNULLED_S3091A",
+                            "PERSONAL_ANNULLED_S3091B",
+                            "PERSONAL_ANNULLED_S3091C",
+                            "PERSONAL_ANNULLED_S3091D",
+                            "PERSONAL_ANNULLED_S310",
+                            "PERSONAL_RECEIVER_MANAGER_COMPLETED",
+                            "COMPANY_COMPLETED_LIQUIDATION",
+                            "COMPANY_TERMINATION"
+                        ],
+                        "type": "string",
+                        "description": "The reason for discharge"
+                    },
+                    "annulmentDate": {
+                        "type": "string",
+                        "description": "The annulment date",
+                        "format": "date",
+                        "example": "2020-11-30"
+                    },
+                    "href": {
+                        "type": "string",
+                        "description": "Specifies the URL of the resource the link goes to",
+                        "example": "http://api.business.govt.nz/services/v4/insolvency-trustee-services/insolvency/48518441"
+                    },
+                    "droSupervisor": {
+                        "$ref": "#/components/schemas/DroSupervisorRecord"
+                    },
+                    "links": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Link"
+                        },
+                        "description": "HATEOAS link container"
+                    }
+                },
+                "description": "Public insolvency detail\nIf insolvencyStatus is Removed then all fields will be suppressed except\nestateNumber, removedDate and insolvencyStatus.\n"
+            },
+            "InsolvenciesSearchResults": {
+                "type": "object",
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/CollectionMetadata"
+                    },
+                    {
+                        "properties": {
+                            "searchCriteria": {
+                                "type": "string",
+                                "description": "The search criteria",
+                                "example": "estate-number:48518441, name:Jim Jimmers, register:Insolvency"
+                            },
+                            "searchResults": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/InsolvenciesSearchResult"
+                                },
+                                "description": "The array of results"
+                            }
+                        }
+                    }
+                ],
+                "description": "Paged collection of the results returned\n"
+            },
+            "InsolvenciesSearchResult": {
+                "type": "object",
+                "properties": {
+                    "estateNumber": {
+                        "type": "integer",
+                        "description": "The primary identifier for the insolvency record.\nLegacyAPIMapping - baseInsolvencyDetail.insolvencyNumber\n",
+                        "format": "int64",
+                        "example": 136813
+                    },
+                    "estateName": {
+                        "type": "string",
+                        "description": "The name of the insolvent party. LegacyAPIMapping - personalInsolvencyDetail.debtorName\n"
+                    },
+                    "nzbn": {
+                        "type": "string",
+                        "description": "The NZBN of the insolvent party if known.\nLegacyAPIMapping - new\n"
+                    },
+                    "adjudicationOrLiquidationDate": {
+                        "type": "string",
+                        "description": "Date adjudicated (Personal) or Liquidation (Company)\nLegacyAPIMapping - baseInsolvencyDetail.adjudicationDateTime\n",
+                        "format": "date",
+                        "example": "2017-08-30"
+                    },
+                    "insolvencyTypeDescription": {
+                        "enum": [
+                            "Creditor Application",
+                            "Debtor Application",
+                            "No Asset Procedure",
+                            "Partnership",
+                            "Insolvent Deceased Estate",
+                            "Debt Repayment Order",
+                            "Receiver Manager (Bankrupt)",
+                            "Voluntary Liquidation",
+                            "Court Liquidation",
+                            "Voluntary Administration",
+                            "Interim Liquidation"
+                        ],
+                        "type": "string",
+                        "description": "Public-facing version of insolvency type. Only applies to public insolvency types.\nLegacyAPIMapping - baseInsolvencyDetail.insolvencyType"
+                    },
+                    "multipleInsolvencies": {
+                        "type": "boolean",
+                        "description": "Indicates that the debtor has had multiple insolvencies.\nLegacyAPIMapping - baseInsolvencyDetail.multipleInsolvencies\n",
+                        "example": false
+                    },
+                    "addressAtAdjudication": {
+                        "type": "string",
+                        "description": "The address of the insolvent at the time of adjudication\nLegacyAPIMapping - activeInsolvencyDetail.addressAtAdjudication"
+                    },
+                    "insolvencyStatus": {
+                        "type": "string",
+                        "description": "Public-facing version of insolvency status - actaully discharge status.\nLegacyAPIMapping - activeInsolvencyDetail.insolvencyStatus\nCurrently Bankrupt/NAP (Conditional) Discharged Annulled Currently In Liquidation Completed Liquidation Terminated\n",
+                        "example": "Current Bankrupt"
+                    },
+                    "officer": {
+                        "type": "string",
+                        "description": "Officer\n"
+                    },
+                    "alternateNames": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "example": "Example Limited"
+                        },
+                        "description": "Alternate names of the estate.\nLegacyAPIMapping - activeInsolvencyDetail.alternateNames\n"
+                    },
+                    "links": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Link"
+                        },
+                        "description": "HATEOAS link container"
+                    }
+                },
+                "description": "Paged collection of the results returned\n"
+            },
+            "RemovedOrCorrectedInsolvenciesResults": {
+                "type": "object",
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/CollectionMetadata"
+                    },
+                    {
+                        "properties": {
+                            "searchCriteria": {
+                                "type": "string",
+                                "description": "The search criteria",
+                                "example": "date-from:2019-07-31, date-to:2019-08-31"
+                            },
+                            "removedOrCorrectedInsolvencies": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/InsolvenciesRecord"
+                                },
+                                "description": "The array of results"
+                            }
+                        }
+                    }
+                ],
+                "description": "Paged collection of the results returned\n"
+            },
+            "ErrorDescription": {
+                "required": [
+                    "errorCode",
+                    "errorMessage"
+                ],
+                "properties": {
+                    "errorMessage": {
+                        "type": "string",
+                        "example": "Request failed"
+                    },
+                    "errorCode": {
+                        "type": "string",
+                        "example": "E022"
+                    },
+                    "errorDescription": {
+                        "type": "string",
+                        "example": "An unexpected error occurred servicing the request."
+                    },
+                    "fields": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/FieldError"
+                        }
+                    },
+                    "help": {
+                        "type": "string",
+                        "example": "http://app.insolvency.govt.nz/developer/help/E022"
+                    }
+                },
+                "description": "Representation of generic error response"
+            },
+            "FieldError": {
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "description": "Representation of generic field error"
+            },
+            "EstateLink": {
+                "properties": {
+                    "href": {
+                        "type": "string",
+                        "description": "Specifies the URL of the resource the link goes to",
+                        "example": "http://api.business.govt.nz/services/v4/insolvency-trustee-services/insolvency/48518441"
+                    },
+                    "estateNumber": {
+                        "type": "string",
+                        "description": "The identifier of the linked estate",
+                        "example": "48518441"
+                    }
+                },
+                "description": "JSON representation of the ATOM pub link format"
+            },
+            "Link": {
+                "required": [
+                    "rel",
+                    "href",
+                    "method"
+                ],
+                "properties": {
+                    "rel": {
+                        "type": "string",
+                        "description": "The rel attribute specifies the relationship between the current\nresource and the linked resource.\n",
+                        "example": "self"
+                    },
+                    "href": {
+                        "type": "string",
+                        "description": "Specifies the URL of the resource the link goes to",
+                        "example": "http://api.business.govt.nz/v1/insolvency/"
+                    },
+                    "method": {
+                        "enum": [
+                            "HEAD",
+                            "GET",
+                            "PUT",
+                            "POST",
+                            "PATCH",
+                            "DELETE"
+                        ],
+                        "type": "string",
+                        "description": "Specifies the HTTP method used",
+                        "example": "GET"
+                    },
+                    "action": {
+                        "type": "string",
+                        "description": "Specifies the action which can be performed"
+                    }
+                },
+                "description": "JSON representation of the ATOM pub link format"
+            },
+            "AddressRecord": {
+                "properties": {
+                    "streetNumber": {
+                        "type": "string",
+                        "description": "Street number - could concatenate sub unit information.",
+                        "example": "5A"
+                    },
+                    "streetName": {
+                        "type": "string",
+                        "description": "Concatenation of street name and street type",
+                        "example": "Evergreen Rise"
+                    },
+                    "suburb": {
+                        "type": "string",
+                        "description": "Suburb provided",
+                        "example": "New Lynn"
+                    },
+                    "city": {
+                        "type": "string",
+                        "description": "City or town",
+                        "example": "Auckland"
+                    },
+                    "postcode": {
+                        "type": "string",
+                        "description": "Postcode for address if known",
+                        "example": "0621"
+                    },
+                    "country": {
+                        "type": "string",
+                        "description": "Country address is in if supplied",
+                        "example": "New Zealand"
+                    }
+                },
+                "description": "Most often a street address. Not guaranteed to be PAF compliant, but most often will be."
+            },
+            "OfficeRecord": {
+                "properties": {
+                    "office": {
+                        "type": "string",
+                        "description": "The insolvency office dealing with the estate.",
+                        "example": "NRG"
+                    },
+                    "insolvencyOfficer": {
+                        "type": "string",
+                        "description": "The current insolvency officer dealing with the estate.",
+                        "example": "Carl Carlson"
+                    },
+                    "officePhone": {
+                        "type": "string",
+                        "description": "Phone number for the office",
+                        "example": "09 916 4600"
+                    }
+                },
+                "description": "Most often a street address. Not guaranteed to be PAF compliant, but most often will be."
+            },
+            "NameRecord": {
+                "properties": {
+                    "firstName": {
+                        "type": "string",
+                        "description": "If the party is human, the first name of the party.",
+                        "example": "Jane"
+                    },
+                    "middleName": {
+                        "type": "string",
+                        "description": "If the party is human, the middle name of the party.",
+                        "example": "Ashley"
+                    },
+                    "lastName": {
+                        "type": "string",
+                        "description": "If the party is human, the last name / surname of the party.",
+                        "example": "Peterson"
+                    }
+                },
+                "description": "Used to return the name of a person or organisation related to the insolvency"
+            },
+            "DroSupervisorRecord": {
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
+                    },
+                    "phone": {
+                        "type": "string"
+                    }
+                },
+                "description": "DRO Supervior contact details applicable only for Debt Repayment Order estate types"
+            },
+            "CollectionMetadata": {
+                "required": [
+                    "page",
+                    "pageSize",
+                    "totalItems",
+                    "totalPages"
+                ],
+                "properties": {
+                    "sortBy": {
+                        "type": "string",
+                        "description": "The property the collection is sorted on. This is optional and may not\nbe supported by all collections\n",
+                        "example": "name"
+                    },
+                    "page": {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "The page in the collection",
+                        "example": 1
+                    },
+                    "sortOrder": {
+                        "enum": [
+                            "ASC",
+                            "DESC"
+                        ],
+                        "type": "string",
+                        "description": "The order the collection is sorted in. This is optional and may not be\nsupported by all collections. Valid values are 'ASC', 'DESC'\n",
+                        "example": "ASC"
+                    },
+                    "totalItems": {
+                        "type": "integer",
+                        "description": "The total number of results/items in this collection",
+                        "format": "int64",
+                        "example": 42
+                    },
+                    "pageSize": {
+                        "type": "integer",
+                        "description": "The number of results/items returned per page of results",
+                        "example": 20
+                    },
+                    "totalPages": {
+                        "type": "integer",
+                        "description": "The number of pages in the collection given the current pageSize.\nNote this will have the value ceiling(totalItems / pageSize).\n",
+                        "example": 13
+                    }
+                },
+                "description": "Metadata associated with a paginated collection"
+            }
+        },
+        "securitySchemes": {
+            "apiKeyHeader": {
+                "type": "apiKey",
+                "name": "Ocp-Apim-Subscription-Key",
+                "in": "header"
+            },
+            "apiKeyQuery": {
+                "type": "apiKey",
+                "name": "subscription-key",
+                "in": "query"
+            }
+        }
+    },
+    "security": [
+        {
+            "apiKeyHeader": []
+        },
+        {
+            "apiKeyQuery": []
+        }
+    ],
+    "tags": [
+        {
+            "name": "RegisterSearch",
+            "description": "Search for and retrieve records from Insolvency and DRO registers.\n"
+        },
+        {
+            "name": "Removals",
+            "description": "Corrections annulments and removals from the register.\n"
+        }
+    ]
+}

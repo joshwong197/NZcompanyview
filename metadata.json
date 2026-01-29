@@ -1,0 +1,5 @@
+{
+  "name": "OrgView",
+  "description": "A recursive corporate structure mapping tool for New Zealand entities using NZBN and Companies Office APIs.",
+  "requestFramePermissions": []
+}
