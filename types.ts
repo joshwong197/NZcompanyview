@@ -9,6 +9,8 @@ export enum NodeType {
 export interface ApiConfig {
   nzbnKey: string;
   companiesKey: string;
+  disqualifiedDirectorsKey: string;
+  insolvencyKey: string; // Insolvency Register API Key
   environment: 'sandbox' | 'prod';
   includeInactive?: boolean;
 }

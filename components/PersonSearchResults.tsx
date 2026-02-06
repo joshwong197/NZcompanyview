@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
-import { User, Building2, ArrowUpDown, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { User, Building2, ArrowUpDown, Filter, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { PersonCompanyResult } from '../types';
 import { CompanyRoleCard } from './CompanyRoleCard';
+import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
+import { InsolvencyRecord } from '../src/api/insolvencyApi';
 
 interface PersonSearchResultsProps {
     personName: string;
     results: PersonCompanyResult[];
+    disqualifiedDirectors?: DisqualifiedDirector[];
+    insolvencyRecords?: InsolvencyRecord[];
     onCompanyClick: (result: PersonCompanyResult) => void;
     onBack: () => void;
 }
@@ -18,6 +22,8 @@ const RESULTS_PER_PAGE = 50;
 export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
     personName,
     results,
+    disqualifiedDirectors,
+    insolvencyRecords,
     onCompanyClick,
     onBack
 }) => {
@@ -68,6 +74,28 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
 
     console.log('PersonSearchResults - activeCount:', activeCount, 'total:', results.length);
 
+    // Helper function to format dates nicely
+    const formatDate = (dateString: string): string => {
+        if (!dateString) return 'Unknown';
+
+        // Remove timezone info (e.g., +1200, +1300) and parse
+        const cleanDate = dateString.split('+')[0].split('-').slice(0, 3).join('-');
+
+        try {
+            const date = new Date(cleanDate);
+            const day = date.getDate();
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'];
+            const month = monthNames[date.getMonth()];
+            const year = date.getFullYear();
+
+            return `${day} ${month} ${year}`;
+        } catch (e) {
+            return dateString;
+        }
+    };
+
+
     return (
         <div id="person-search-results" className="absolute inset-0 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
             {/* Header */}
@@ -93,6 +121,126 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                         </p>
                     </div>
                 </div>
+
+                {/* COMBINED ALERT: DISQUALIFIED DIRECTORS & BANKRUPTCY */}
+                {((disqualifiedDirectors && disqualifiedDirectors.length > 0) || (insolvencyRecords && insolvencyRecords.length > 0)) && (
+                    <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-md shadow-sm">
+                        <div className="flex items-start gap-3">
+                            <div className="p-2 bg-red-100 dark:bg-red-800 rounded-full shrink-0">
+                                <AlertTriangle className="text-red-600 dark:text-red-300" size={20} />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-base font-bold text-red-700 dark:text-red-400 mb-1">
+                                    {disqualifiedDirectors && disqualifiedDirectors.length > 0 && insolvencyRecords && insolvencyRecords.length > 0
+                                        ? 'Disqualified Director & Bankruptcy Alert'
+                                        : disqualifiedDirectors && disqualifiedDirectors.length > 0
+                                            ? 'Disqualified Director Alert'
+                                            : 'Bankruptcy Alert'}
+                                </h3>
+                                <p className="text-sm text-red-600 dark:text-red-300 mb-3">
+                                    "{personName}" has records in the
+                                    {disqualifiedDirectors && disqualifiedDirectors.length > 0 && ' Disqualified Directors register'}
+                                    {disqualifiedDirectors && disqualifiedDirectors.length > 0 && insolvencyRecords && insolvencyRecords.length > 0 && ' and'}
+                                    {insolvencyRecords && insolvencyRecords.length > 0 && ' Insolvency register'}.
+                                </p>
+
+                                {/* DISQUALIFIED DIRECTORS SECTION */}
+                                {disqualifiedDirectors && disqualifiedDirectors.length > 0 && (
+                                    <div className="space-y-3 mb-4">
+                                        <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Disqualified Director Records:</h4>
+                                        {disqualifiedDirectors.map((director, idx) => (
+                                            <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded border border-red-200 dark:border-red-800/50">
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <div>
+                                                        <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                                                            {director.firstName} {director.middleName} {director.lastName}
+                                                        </p>
+                                                        {director.aliases && director.aliases.aliases && director.aliases.aliases.length > 0 && (
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                                                Also known as: {director.aliases.aliases.join(', ')}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 rounded-full font-medium whitespace-nowrap">
+                                                        ID: {director.disqualifiedDirectorId}
+                                                    </span>
+                                                </div>
+
+                                                {/* Disqualification Criteria */}
+                                                {director.disqualificationCriteria?.criteria?.map((c, i) => (
+                                                    <div key={i} className="mt-2 pl-3 border-l-2 border-red-300 dark:border-red-700">
+                                                        <p className="text-xs text-gray-700 dark:text-gray-300">
+                                                            <span className="font-medium text-red-600 dark:text-red-400">Reason:</span> {c.criteria || 'Section 385 Companies Act 1993'}
+                                                        </p>
+                                                        <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                                            <span className="font-medium text-red-600 dark:text-red-400">Disqualification Period:</span>{' '}
+                                                            {formatDate(c.startDate)} - {c.endDate ? formatDate(c.endDate) : 'Indefinite'}
+                                                        </p>
+                                                        {c.comments && (
+                                                            <p className="text-xs text-gray-600 dark:text-gray-400 italic mt-1.5 bg-gray-50 dark:bg-slate-900/50 p-2 rounded">
+                                                                "{c.comments}"
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* INSOLVENCY/BANKRUPTCY SECTION */}
+                                {insolvencyRecords && insolvencyRecords.length > 0 && (
+                                    <div className="space-y-3">
+                                        <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Bankruptcy/Insolvency Records:</h4>
+                                        {insolvencyRecords.map((record, idx) => (
+                                            <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded border border-red-200 dark:border-red-800/50">
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <div>
+                                                        <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                                                            {record.estateName}
+                                                        </p>
+                                                        {record.alternateNames && record.alternateNames.length > 0 && (
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                                                Also known as: {record.alternateNames.join(', ')}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${record.insolvencyStatus.includes('Current')
+                                                            ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'
+                                                            : 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400'
+                                                        }`}>
+                                                        {record.insolvencyStatus}
+                                                    </span>
+                                                </div>
+
+                                                <div className="mt-2 pl-3 border-l-2 border-red-300 dark:border-red-700">
+                                                    <p className="text-xs text-gray-700 dark:text-gray-300">
+                                                        <span className="font-medium text-red-600 dark:text-red-400">Type:</span> {record.insolvencyTypeDescription}
+                                                    </p>
+                                                    <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                                        <span className="font-medium text-red-600 dark:text-red-400">Adjudication Date:</span>{' '}
+                                                        {formatDate(record.adjudicationOrLiquidationDate)}
+                                                    </p>
+                                                    {record.dischargeOrCompletionDate && (
+                                                        <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                                            <span className="font-medium text-red-600 dark:text-red-400">Discharge/Completion Date:</span>{' '}
+                                                            {formatDate(record.dischargeOrCompletionDate)}
+                                                        </p>
+                                                    )}
+                                                    {record.multipleInsolvencies && (
+                                                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium">
+                                                            ⚠️ Multiple insolvencies on record
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Stats */}
                 <div className="flex gap-4 mt-4">

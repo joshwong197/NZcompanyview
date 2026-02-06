@@ -22,12 +22,15 @@ import { generateOrgChart, searchEntities } from './services/apiService';
 import { extractDirectorsFromEntity } from './services/directorService';
 import { ApiConfig, EntitySearchResultItem, GraphSnapshot, GraphNode, GraphEdge, LogEntry, NodeType, NZBNFullEntity, PersonCompanyResult } from './types';
 import { searchByPersonName } from './services/directorSearchService';
+import { searchDisqualifiedDirectors, DisqualifiedDirector } from './src/api/disqualifiedDirectorsApi';
 import { BASE_API_URL, API_PATHS } from './constants';
 
 
 const DEFAULT_CONFIG: ApiConfig = {
   nzbnKey: '',
   companiesKey: '',
+  disqualifiedDirectorsKey: '',
+  insolvencyKey: '',
   environment: 'sandbox',
 };
 
@@ -133,6 +136,7 @@ function App() {
   const [searchMode, setSearchMode] = useState<'company' | 'person'>('company');
   const [personSearchResults, setPersonSearchResults] = useState<PersonCompanyResult[]>([]);
   const [personSearchName, setPersonSearchName] = useState('');
+  const [disqualifiedMatches, setDisqualifiedMatches] = useState<DisqualifiedDirector[]>([]);
   const [confirmChartLoad, setConfirmChartLoad] = useState<PersonCompanyResult | null>(null);
 
   // Sidebar State
@@ -214,18 +218,44 @@ function App() {
     setIsLoading(true);
     setError(null);
     setPersonSearchResults([]);
+    setDisqualifiedMatches([]); // Reset
     setApiLogs([]);
 
     try {
       console.log(`🔍 Searching for person: "${personName}"`);
-      const results = await searchByPersonName(personName, config.companiesKey, config.environment, handleLog);
 
-      if (results.length === 0) {
-        setError(`No directorship or shareholding records found for "${personName}".`);
+      const searchPromises: Promise<any>[] = [
+        searchByPersonName(personName, config.companiesKey, config.environment, handleLog)
+      ];
+
+      // Only search disqualified if key is present
+      if (config.disqualifiedDirectorsKey) {
+        // Run in parallel
+        searchPromises.push(
+          searchDisqualifiedDirectors(personName, config, handleLog)
+            .catch(err => {
+              console.warn("Disqualified Search failed", err);
+              return { roles: [] }; // Fail silently for this part if error
+            })
+        );
       } else {
-        setPersonSearchResults(results);
+        searchPromises.push(Promise.resolve({ roles: [] }));
+      }
+
+      const [personResults, disqualifiedResults] = await Promise.all(searchPromises);
+
+      if (personResults.length === 0 && (!disqualifiedResults.roles || disqualifiedResults.roles.length === 0)) {
+        setError(`No directorship, shareholding, or disqualification records found for "${personName}".`);
+      } else {
+        setPersonSearchResults(personResults);
         setPersonSearchName(personName);
-        console.log(`✅ Found ${results.length} companies for "${personName}"`);
+
+        if (disqualifiedResults.roles && disqualifiedResults.roles.length > 0) {
+          console.log(`⚠️ Found ${disqualifiedResults.roles.length} disqualified director matches!`);
+          setDisqualifiedMatches(disqualifiedResults.roles);
+        }
+
+        console.log(`✅ Found ${personResults.length} companies for "${personName}"`);
       }
     } catch (err: any) {
       setError(err.message || "Person search failed.");
@@ -1176,13 +1206,15 @@ function App() {
 
           <div className="flex-1 relative">
             {/* Show Person Search Results OR ReactFlow Graph */}
-            {personSearchResults.length > 0 ? (
+            {personSearchResults.length > 0 || disqualifiedMatches.length > 0 ? (
               <PersonSearchResults
                 personName={personSearchName}
                 results={personSearchResults}
+                disqualifiedDirectors={disqualifiedMatches}
                 onCompanyClick={handleCompanyCardClick}
                 onBack={() => {
                   setPersonSearchResults([]);
+                  setDisqualifiedMatches([]);
                   setPersonSearchName('');
                   setSearchQuery('');
                 }}

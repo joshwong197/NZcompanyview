@@ -1,0 +1,15 @@
+BACKEND_READY
+
+Task: Implement Disqualified Directors Search and Alert
+-------------------------------------------------------
+1. Created `src/api/disqualifiedDirectorsApi.ts` to connect to the Disqualified Directors API.
+2. Updated `App.tsx` to perform parallel searches for standard roles and disqualified status.
+3. Updated `PersonSearchResults.tsx` to display a high-visibility Red Alert Box if a searched name matches a disqualified director.
+4. Added configuration field for `disqualifiedDirectorsKey` in the top bar.
+
+Verification:
+1. Open the application.
+2. In the top Config Bar, enter a valid "Disqualified Dir Key".
+3. Switch the search mode to **Person** (click the User icon).
+4. Search for a known disqualified director (e.g. names from the API docs or known test data).
+5. Verify that a red warning box appears at the top of the results list detailing the disqualification.

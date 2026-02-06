@@ -1,0 +1,123 @@
+import { ApiConfig, LoggerCallback } from '../../types';
+import { BASE_API_URL } from '../../constants';
+
+const INSOLVENCY_PATH = '/insolvency-trustee-services/v5';
+
+// Response Types based on docs/insolvency-trustee-services.json
+export interface InsolvencyRecord {
+    estateNumber: number;
+    estateName: string;
+    nzbn?: string;
+    adjudicationOrLiquidationDate: string;
+    insolvencyTypeDescription: string;
+    multipleInsolvencies: boolean;
+    addressAtAdjudication?: string;
+    insolvencyStatus: string; // "Current Bankrupt", "Discharged", "Annulled", etc.
+    officer?: string;
+    alternateNames?: string[];
+    dischargeOrCompletionDate?: string;
+}
+
+export interface InsolvencySearchResult {
+    totalItems: number;
+    pageSize: number;
+    page: number;
+    totalPages: number;
+    searchCriteria: string;
+    searchResults: InsolvencyRecord[];
+}
+
+/**
+ * Helper for safe fetching with logging
+ */
+async function safeFetch(url: string, headers: HeadersInit, logger?: LoggerCallback) {
+    const method = 'GET';
+
+    if (logger) {
+        const maskedHeaders: Record<string, string> = {};
+        if (typeof headers === 'object' && !Array.isArray(headers)) {
+            Object.entries(headers as Record<string, string>).forEach(([k, v]) => {
+                maskedHeaders[k] = v.length > 4 ? v.substring(0, 4) + '****' : '****';
+            });
+        }
+
+        logger({
+            timestamp: new Date().toISOString(),
+            method,
+            url,
+            headers: maskedHeaders,
+            status: 0,
+            message: 'Sending Insolvency Register Request...'
+        });
+    }
+
+    try {
+        const res = await fetch(url, { headers });
+
+        if (logger) {
+            logger({
+                timestamp: new Date().toISOString(),
+                method,
+                url,
+                headers: {},
+                status: res.status,
+                message: res.statusText
+            });
+        }
+
+        return res;
+    } catch (error: any) {
+        if (logger) {
+            logger({
+                timestamp: new Date().toISOString(),
+                method,
+                url,
+                headers: {},
+                status: 0,
+                message: `Network Error: ${error.message}`
+            });
+        }
+        throw error;
+    }
+}
+
+/**
+ * Searches for insolvency records by name.
+ * 
+ * @param name Name of the person to search for
+ * @param config ApiConfig containing the API key
+ * @param logger Optional logger callback
+ * @param pageSize Number of results per page (default 1000)
+ * @param page Page number (default 1)
+ */
+export async function searchInsolvency(
+    name: string,
+    config: ApiConfig,
+    logger?: LoggerCallback,
+    pageSize: number = 1000,
+    page: number = 1
+): Promise<InsolvencySearchResult> {
+    const envPath = config.environment === 'prod' ? 'gateway' : 'sandbox';
+    // Production: https://api.business.govt.nz/gateway/insolvency-trustee-services/v5/insolvencies
+
+    const baseUrl = `${BASE_API_URL}/${envPath}${INSOLVENCY_PATH}`;
+    const url = `${baseUrl}/insolvencies?name=${encodeURIComponent(name)}&page=${page}&page-size=${pageSize}`;
+
+    const apiKey = (config as any).insolvencyKey;
+
+    if (!apiKey) {
+        throw new Error("Insolvency Register API Key is missing.");
+    }
+
+    const response = await safeFetch(url, {
+        'Ocp-Apim-Subscription-Key': apiKey,
+        'Accept': 'application/json'
+    }, logger);
+
+    if (!response.ok) {
+        if (response.status === 401) throw new Error("Insolvency Register API Unauthorized.");
+        throw new Error(`Insolvency Register API Error: ${response.status}`);
+    }
+
+    return await response.json();
+}
