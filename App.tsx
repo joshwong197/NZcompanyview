@@ -23,6 +23,7 @@ import { extractDirectorsFromEntity } from './services/directorService';
 import { ApiConfig, EntitySearchResultItem, GraphSnapshot, GraphNode, GraphEdge, LogEntry, NodeType, NZBNFullEntity, PersonCompanyResult } from './types';
 import { searchByPersonName } from './services/directorSearchService';
 import { searchDisqualifiedDirectors, DisqualifiedDirector } from './src/api/disqualifiedDirectorsApi';
+import { searchInsolvency, InsolvencyRecord } from './src/api/insolvencyApi';
 import { BASE_API_URL, API_PATHS } from './constants';
 
 
@@ -137,6 +138,7 @@ function App() {
   const [personSearchResults, setPersonSearchResults] = useState<PersonCompanyResult[]>([]);
   const [personSearchName, setPersonSearchName] = useState('');
   const [disqualifiedMatches, setDisqualifiedMatches] = useState<DisqualifiedDirector[]>([]);
+  const [insolvencyMatches, setInsolvencyMatches] = useState<InsolvencyRecord[]>([]);
   const [confirmChartLoad, setConfirmChartLoad] = useState<PersonCompanyResult | null>(null);
 
   // Sidebar State
@@ -219,6 +221,7 @@ function App() {
     setError(null);
     setPersonSearchResults([]);
     setDisqualifiedMatches([]); // Reset
+    setInsolvencyMatches([]); // Reset
     setApiLogs([]);
 
     try {
@@ -242,10 +245,27 @@ function App() {
         searchPromises.push(Promise.resolve({ roles: [] }));
       }
 
-      const [personResults, disqualifiedResults] = await Promise.all(searchPromises);
+      // Only search insolvency if key is present
+      if (config.insolvencyKey) {
+        searchPromises.push(
+          searchInsolvency(personName, config, handleLog)
+            .catch(err => {
+              console.warn("Insolvency Search failed", err);
+              return { searchResults: [] }; // Fail silently for this part if error
+            })
+        );
+      } else {
+        searchPromises.push(Promise.resolve({ searchResults: [] }));
+      }
 
-      if (personResults.length === 0 && (!disqualifiedResults.roles || disqualifiedResults.roles.length === 0)) {
-        setError(`No directorship, shareholding, or disqualification records found for "${personName}".`);
+      const [personResults, disqualifiedResults, insolvencyResults] = await Promise.all(searchPromises);
+
+      if (
+        personResults.length === 0 &&
+        (!disqualifiedResults.roles || disqualifiedResults.roles.length === 0) &&
+        (!insolvencyResults.searchResults || insolvencyResults.searchResults.length === 0)
+      ) {
+        setError(`No directorship, shareholding, disqualification, or insolvency records found for "${personName}".`);
       } else {
         setPersonSearchResults(personResults);
         setPersonSearchName(personName);
@@ -253,6 +273,11 @@ function App() {
         if (disqualifiedResults.roles && disqualifiedResults.roles.length > 0) {
           console.log(`⚠️ Found ${disqualifiedResults.roles.length} disqualified director matches!`);
           setDisqualifiedMatches(disqualifiedResults.roles);
+        }
+
+        if (insolvencyResults.searchResults && insolvencyResults.searchResults.length > 0) {
+          console.log(`⚠️ Found ${insolvencyResults.searchResults.length} insolvency record(s)!`);
+          setInsolvencyMatches(insolvencyResults.searchResults);
         }
 
         console.log(`✅ Found ${personResults.length} companies for "${personName}"`);
@@ -1206,15 +1231,17 @@ function App() {
 
           <div className="flex-1 relative">
             {/* Show Person Search Results OR ReactFlow Graph */}
-            {personSearchResults.length > 0 || disqualifiedMatches.length > 0 ? (
+            {personSearchResults.length > 0 || disqualifiedMatches.length > 0 || insolvencyMatches.length > 0 ? (
               <PersonSearchResults
                 personName={personSearchName}
                 results={personSearchResults}
                 disqualifiedDirectors={disqualifiedMatches}
+                insolvencyRecords={insolvencyMatches}
                 onCompanyClick={handleCompanyCardClick}
                 onBack={() => {
                   setPersonSearchResults([]);
                   setDisqualifiedMatches([]);
+                  setInsolvencyMatches([]);
                   setPersonSearchName('');
                   setSearchQuery('');
                 }}
