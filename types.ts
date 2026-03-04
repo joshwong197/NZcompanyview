@@ -45,6 +45,12 @@ export interface NodeData {
   hiddenDescendantCount?: number; // Total hidden descendants (for badge)
   appointmentDate?: string; // ISO Date string
   vacationDate?: string; // ISO Date string
+  // Insolvency Status properties
+  isInExternalAdmin?: boolean;
+  externalAdminType?: string;
+  removalCommenced?: boolean;
+  hasHistoricInsolvency?: boolean;
+  historicInsolvencyType?: string;
 }
 
 export interface EdgeData {
@@ -93,6 +99,35 @@ export interface PersonCompanyResult {
   isInactive?: boolean; // If role is inactive (resigned/removed)
   resignationDate?: string; // If director resigned
   entityStatusCode?: number; // Company status code (80=Removed, 90=Inactive, etc.)
+  // Enriched status fields (from NZBN entity lookup)
+  entityStatusDescription?: string; // e.g. "In Liquidation", "In Receivership"
+  isInExternalAdmin?: boolean; // True if in receivership/liquidation/administration
+  externalAdminType?: string; // Specific type: "In Receivership", "In Liquidation", etc.
+  removalCommenced?: boolean; // True if registered but removal process has started
+  hasHistoricInsolvency?: boolean; // True if removed AND had insolvency history
+  historicInsolvencyType?: string; // e.g. "Liquidation", "Receivership"
+}
+
+// Tab system types
+export interface CompanyTab {
+  id: string;
+  label: string;
+  nzbn: string;
+  searchQuery: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  allNodesInMemory: GraphNode[];
+  isLoading: boolean;
+}
+
+export interface IndividualTab {
+  id: string;
+  label: string;
+  searchQuery: string;
+  personResults: PersonCompanyResult[];
+  disqualifiedMatches: any[];
+  insolvencyMatches: any[];
+  isEnriching: boolean; // True while fetching NZBN enrichment data
 }
 
 // --- API Response Types (Aligned with JSON Schemas) ---

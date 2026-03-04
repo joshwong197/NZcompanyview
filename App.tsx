@@ -15,12 +15,14 @@ import { NodeContextMenu } from './components/NodeContextMenu';
 import { DirectorPanel } from './components/DirectorPanel';
 import { PersonSearchResults } from './components/PersonSearchResults';
 import { ConfirmOrgChartDialog } from './components/ConfirmOrgChartDialog';
+import { TabBar } from './components/TabBar';
+import { enrichCompanyResults, enrichGraphNodes } from './src/api/companyStatusApi';
 import { markDirectLineage, calculateHiddenDescendants, expandNodeSubtree, collapseNodeSubtree } from './utils/graphVisibility';
 import { getLayoutedElements } from './services/layoutService';
 import { tidyUpLayout } from './services/layoutOptimizer';
 import { generateOrgChart, searchEntities } from './services/apiService';
 import { extractDirectorsFromEntity } from './services/directorService';
-import { ApiConfig, EntitySearchResultItem, GraphSnapshot, GraphNode, GraphEdge, LogEntry, NodeType, NZBNFullEntity, PersonCompanyResult } from './types';
+import { ApiConfig, EntitySearchResultItem, GraphSnapshot, GraphNode, GraphEdge, LogEntry, NodeType, NZBNFullEntity, PersonCompanyResult, CompanyTab, IndividualTab } from './types';
 import { searchByPersonName } from './services/directorSearchService';
 import { searchDisqualifiedDirectors, DisqualifiedDirector } from './src/api/disqualifiedDirectorsApi';
 import { searchInsolvency, InsolvencyRecord } from './src/api/insolvencyApi';
@@ -133,13 +135,21 @@ function App() {
   const [shouldAutoTidy, setShouldAutoTidy] = useState(false);
   const hasAutoTidiedRef = useRef(false);
 
-  // Person Search State
+  // Person Search State (legacy - kept for active tab)
   const [searchMode, setSearchMode] = useState<'company' | 'person'>('company');
   const [personSearchResults, setPersonSearchResults] = useState<PersonCompanyResult[]>([]);
   const [personSearchName, setPersonSearchName] = useState('');
   const [disqualifiedMatches, setDisqualifiedMatches] = useState<DisqualifiedDirector[]>([]);
   const [insolvencyMatches, setInsolvencyMatches] = useState<InsolvencyRecord[]>([]);
   const [confirmChartLoad, setConfirmChartLoad] = useState<PersonCompanyResult | null>(null);
+
+  // Tab System State
+  const MAX_TABS = 10;
+  const [activeMainTab, setActiveMainTab] = useState<'company' | 'individual'>('company');
+  const [companyTabs, setCompanyTabs] = useState<CompanyTab[]>([]);
+  const [individualTabs, setIndividualTabs] = useState<IndividualTab[]>([]);
+  const [activeCompanyTabId, setActiveCompanyTabId] = useState<string | null>(null);
+  const [activeIndividualTabId, setActiveIndividualTabId] = useState<string | null>(null);
 
   // Sidebar State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -281,6 +291,45 @@ function App() {
         }
 
         console.log(`✅ Found ${personResults.length} companies for "${personName}"`);
+
+        // Create a new Individual tab
+        const tabId = `ind-${Date.now()}`;
+        const newTab: IndividualTab = {
+          id: tabId,
+          label: personName,
+          searchQuery: personName,
+          personResults: personResults,
+          disqualifiedMatches: disqualifiedResults.roles || [],
+          insolvencyMatches: insolvencyResults.searchResults || [],
+          isEnriching: true
+        };
+
+        setIndividualTabs(prev => {
+          const updated = prev.length >= MAX_TABS ? [...prev.slice(1), newTab] : [...prev, newTab];
+          return updated;
+        });
+        setActiveIndividualTabId(tabId);
+        setActiveMainTab('individual');
+
+        // Async NZBN enrichment for company statuses
+        if (config.nzbnKey && personResults.length > 0) {
+          enrichCompanyResults(personResults, config, handleLog).then(enrichedResults => {
+            setIndividualTabs(prev => prev.map(t =>
+              t.id === tabId ? { ...t, personResults: enrichedResults, isEnriching: false } : t
+            ));
+            // Also update the legacy state if this tab is still active
+            setPersonSearchResults(enrichedResults);
+          }).catch(err => {
+            console.warn('Enrichment failed:', err);
+            setIndividualTabs(prev => prev.map(t =>
+              t.id === tabId ? { ...t, isEnriching: false } : t
+            ));
+          });
+        } else {
+          setIndividualTabs(prev => prev.map(t =>
+            t.id === tabId ? { ...t, isEnriching: false } : t
+          ));
+        }
       }
     } catch (err: any) {
       setError(err.message || "Person search failed.");
@@ -290,51 +339,161 @@ function App() {
     }
   };
 
-  // Handle company card click from person search
+  // Handle company card click from person search — opens in Company tab directly
   const handleCompanyCardClick = (result: PersonCompanyResult) => {
-    setConfirmChartLoad(result);
+    // Create a new Company tab and load the org chart
+    const entity: EntitySearchResultItem = {
+      nzbn: result.nzbn,
+      entityName: result.companyName,
+      entityStatusDescription: result.status,
+      entityTypeCode: 'LTD'
+    };
+
+    // Switch to company view and load
+    setActiveMainTab('company');
+    handleSelectEntityInTab(entity);
   };
 
-  // Handle load org chart confirmation
+  // Handle load org chart confirmation (legacy — kept for backward compat)
   const handleConfirmLoadChart = async () => {
     if (!confirmChartLoad) return;
-
-    // Auto-save current person search as snapshot
-    if (personSearchResults.length > 0 && personSearchName) {
-      const newSnapshot: GraphSnapshot = {
-        id: Date.now().toString(),
-        name: `Person: ${personSearchName}`,
-        dateCreated: Date.now(),
-        searchType: 'person',
-        searchQuery: personSearchName,
-        nodes: [],
-        edges: [],
-        personResults: personSearchResults
-      };
-
-      const updated = [...snapshots, newSnapshot];
-      setSnapshots(updated);
-      localStorage.setItem('orgview_snapshots', JSON.stringify(updated));
-      console.log(`📸 Auto-saved person search snapshot: "${personSearchName}"`);
-    }
-
-    // Close confirmation
     setConfirmChartLoad(null);
 
-    // Clear person search results to show graph
-    setPersonSearchResults([]);
-    setPersonSearchName('');
-
-    // Load the company org chart
     const entity: EntitySearchResultItem = {
       nzbn: confirmChartLoad.nzbn,
       entityName: confirmChartLoad.companyName,
       entityStatusDescription: confirmChartLoad.status,
-      entityTypeCode: 'LTD' // Assuming company
+      entityTypeCode: 'LTD'
     };
 
-    await handleSelectEntity(entity);
+    setActiveMainTab('company');
+    await handleSelectEntityInTab(entity);
   };
+
+  // Tab Management Handlers
+  const handleSelectEntityInTab = async (entity: EntitySearchResultItem) => {
+    const tabId = `comp-${Date.now()}`;
+    const newTab: CompanyTab = {
+      id: tabId,
+      label: entity.entityName,
+      nzbn: entity.nzbn,
+      searchQuery: entity.entityName,
+      nodes: [],
+      edges: [],
+      allNodesInMemory: [],
+      isLoading: true
+    };
+
+    setCompanyTabs(prev => {
+      const updated = prev.length >= MAX_TABS ? [...prev.slice(1), newTab] : [...prev, newTab];
+      return updated;
+    });
+    setActiveCompanyTabId(tabId);
+
+    // Delegate to existing entity select logic which will populate the graph
+    await handleSelectEntity(entity);
+
+    // After loading, update the tab with the graph data
+    // (This will be done via the existing setNodes/setEdges which we read in render)
+  };
+
+  const handleMainTabChange = (tab: 'company' | 'individual') => {
+    setActiveMainTab(tab);
+    if (tab === 'individual' && activeIndividualTabId) {
+      // Restore the active individual tab's data
+      const activeTab = individualTabs.find(t => t.id === activeIndividualTabId);
+      if (activeTab) {
+        setPersonSearchResults(activeTab.personResults);
+        setPersonSearchName(activeTab.label);
+        setDisqualifiedMatches(activeTab.disqualifiedMatches);
+        setInsolvencyMatches(activeTab.insolvencyMatches);
+        setSearchMode('person');
+      }
+    } else if (tab === 'company') {
+      setSearchMode('company');
+    }
+  };
+
+  const handleSubTabClick = (tabId: string) => {
+    if (activeMainTab === 'company') {
+      setActiveCompanyTabId(tabId);
+      const tab = companyTabs.find(t => t.id === tabId);
+      if (tab) {
+        setSearchQuery(tab.searchQuery);
+        // Restore graph data from tab
+        setNodes(tab.nodes);
+        setEdges(tab.edges);
+        setAllNodesInMemory(tab.allNodesInMemory);
+      }
+    } else {
+      setActiveIndividualTabId(tabId);
+      const tab = individualTabs.find(t => t.id === tabId);
+      if (tab) {
+        setPersonSearchResults(tab.personResults);
+        setPersonSearchName(tab.label);
+        setDisqualifiedMatches(tab.disqualifiedMatches);
+        setInsolvencyMatches(tab.insolvencyMatches);
+      }
+    }
+  };
+
+  const handleSubTabClose = (tabId: string) => {
+    if (activeMainTab === 'company') {
+      setCompanyTabs(prev => {
+        const updated = prev.filter(t => t.id !== tabId);
+        if (activeCompanyTabId === tabId) {
+          const newActive = updated.length > 0 ? updated[updated.length - 1].id : null;
+          setActiveCompanyTabId(newActive);
+          if (newActive) {
+            const tab = updated.find(t => t.id === newActive);
+            if (tab) {
+              setNodes(tab.nodes);
+              setEdges(tab.edges);
+              setAllNodesInMemory(tab.allNodesInMemory);
+            }
+          } else {
+            setNodes([]);
+            setEdges([]);
+          }
+        }
+        return updated;
+      });
+    } else {
+      setIndividualTabs(prev => {
+        const updated = prev.filter(t => t.id !== tabId);
+        if (activeIndividualTabId === tabId) {
+          const newActive = updated.length > 0 ? updated[updated.length - 1].id : null;
+          setActiveIndividualTabId(newActive);
+          if (newActive) {
+            const tab = updated.find(t => t.id === newActive);
+            if (tab) {
+              setPersonSearchResults(tab.personResults);
+              setPersonSearchName(tab.label);
+              setDisqualifiedMatches(tab.disqualifiedMatches);
+              setInsolvencyMatches(tab.insolvencyMatches);
+            }
+          } else {
+            setPersonSearchResults([]);
+            setPersonSearchName('');
+            setDisqualifiedMatches([]);
+            setInsolvencyMatches([]);
+          }
+        }
+        return updated;
+      });
+    }
+  };
+
+  // Save current graph state back to the active company tab whenever nodes/edges change
+  useEffect(() => {
+    if (activeCompanyTabId && nodes.length > 0) {
+      setCompanyTabs(prev => prev.map(t =>
+        t.id === activeCompanyTabId
+          ? { ...t, nodes: nodes as any, edges: edges as any, allNodesInMemory, isLoading: false }
+          : t
+      ));
+    }
+  }, [nodes, edges, allNodesInMemory, activeCompanyTabId]);
 
   // Selection Logic (Level 2: Build Graph)
   const handleSelectEntity = async (entity: EntitySearchResultItem) => {
@@ -410,6 +569,15 @@ function App() {
           setNodes(optimized.nodes);
           setEdges(optimized.edges);
           console.log('✨ Auto-Tidy: Complete!');
+
+          // Background enrichment of nodes with NZBN insolvency data
+          enrichGraphNodes(processedNodes, { ...config, includeInactive }, handleLog).then(enrichedNodes => {
+            setAllNodesInMemory(enrichedNodes);
+            setNodes(prevVars => prevVars.map(n => {
+              const enriched = enrichedNodes.find(en => en.id === n.id);
+              return enriched ? { ...n, data: enriched.data } : n;
+            }) as any);
+          });
         }, 300);
       }
     } catch (err: any) {
@@ -996,7 +1164,7 @@ function App() {
               <button
                 onClick={() => {
                   setSearchMode('company');
-                  setPersonSearchResults([]);
+                  setActiveMainTab('company');
                   setSearchQuery('');
                   setError(null);
                 }}
@@ -1011,6 +1179,7 @@ function App() {
               <button
                 onClick={() => {
                   setSearchMode('person');
+                  setActiveMainTab('individual');
                   setSearchResults([]);
                   setShowDropdown(false);
                   setSearchQuery('');
@@ -1091,7 +1260,7 @@ function App() {
                 {searchResults.map((entity) => (
                   <button
                     key={entity.nzbn}
-                    onClick={() => handleSelectEntity(entity)}
+                    onClick={() => handleSelectEntityInTab(entity)}
                     className="w-full text-left px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 hover:bg-blue-50 dark:hover:bg-slate-700/50 transition-colors flex items-start gap-3 group"
                   >
                     <div className="mt-1 p-1.5 bg-slate-100 dark:bg-slate-900 rounded text-slate-400 dark:text-slate-500 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/30 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
@@ -1229,9 +1398,20 @@ function App() {
             </div>
           )}
 
+          {/* Tab Bar */}
+          <TabBar
+            activeMainTab={activeMainTab}
+            onMainTabChange={handleMainTabChange}
+            companyTabs={companyTabs.map(t => ({ id: t.id, label: t.label, isLoading: t.isLoading }))}
+            individualTabs={individualTabs.map(t => ({ id: t.id, label: t.label, isLoading: t.isEnriching }))}
+            activeSubTabId={activeMainTab === 'company' ? activeCompanyTabId : activeIndividualTabId}
+            onSubTabClick={handleSubTabClick}
+            onSubTabClose={handleSubTabClose}
+          />
+
           <div className="flex-1 relative">
-            {/* Show Person Search Results OR ReactFlow Graph */}
-            {personSearchResults.length > 0 || disqualifiedMatches.length > 0 || insolvencyMatches.length > 0 ? (
+            {/* Show Person Search Results OR ReactFlow Graph based on active main tab */}
+            {activeMainTab === 'individual' && (personSearchResults.length > 0 || disqualifiedMatches.length > 0 || insolvencyMatches.length > 0) ? (
               <PersonSearchResults
                 personName={personSearchName}
                 results={personSearchResults}

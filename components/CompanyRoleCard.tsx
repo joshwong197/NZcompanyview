@@ -1,5 +1,5 @@
 import React from 'react';
-import { Building2, Briefcase, TrendingUp } from 'lucide-react';
+import { Building2, Briefcase, TrendingUp, AlertTriangle, Shield } from 'lucide-react';
 import { PersonCompanyResult } from '../types';
 
 interface CompanyRoleCardProps {
@@ -15,11 +15,20 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
         shareholding,
         status,
         roleType,
-        entityStatusCode
+        entityStatusCode,
+        isInExternalAdmin,
+        externalAdminType,
+        removalCommenced,
+        hasHistoricInsolvency,
+        historicInsolvencyType,
+        entityStatusDescription
     } = result;
 
     // Check if company is removed/inactive
-    const isCompanyRemoved = (entityStatusCode || 0) >= 80;
+    // First rely on the enriched NZBN status if available, fallback to the role search status code
+    const isCompanyRemoved = entityStatusDescription
+        ? entityStatusDescription.toLowerCase().includes('removed') || entityStatusDescription.toLowerCase() === 'inactive'
+        : (entityStatusCode || 0) >= 80;
 
     // Format resignation date safely
     const formatResignationDate = (dateStr?: string): string | null => {
@@ -35,20 +44,45 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
 
     const resignationDateFormatted = formatResignationDate(result.resignationDate);
 
+    // Determine the display status text (enriched if available)
+    const getDisplayStatus = () => {
+        if (isInExternalAdmin && externalAdminType) {
+            return externalAdminType.toUpperCase();
+        }
+        if (entityStatusDescription) {
+            return entityStatusDescription.toUpperCase();
+        }
+        return status;
+    };
+
+    // Determine status badge styling
+    const getStatusBadgeClass = () => {
+        if (isInExternalAdmin) {
+            return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700';
+        }
+        if (removalCommenced) {
+            return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700';
+        }
+        if (status === 'REGISTERED') {
+            return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+        }
+        return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 line-through';
+    };
+
     return (
         <div
             onClick={onClick}
-            className={`p-4 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg transition-all cursor-pointer group ${isCompanyRemoved ? 'opacity-60 hover:opacity-80' : ''
+            className={`p-4 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-lg transition-all cursor-pointer group ${isCompanyRemoved && !isInExternalAdmin ? 'opacity-60 hover:opacity-80' : ''
                 }`}
         >
             {/* Company Header */}
             <div className="flex items-start gap-3 mb-3">
-                <div className={`p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg group-hover:bg-blue-200 dark:group-hover:bg-blue-800/40 transition-colors ${isCompanyRemoved ? 'blur-[0.5px]' : ''
+                <div className={`p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg group-hover:bg-blue-200 dark:group-hover:bg-blue-800/40 transition-colors ${isCompanyRemoved && !isInExternalAdmin ? 'blur-[0.5px]' : ''
                     }`}>
                     <Building2 className="text-blue-600 dark:text-blue-400" size={24} />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <h3 className={`text-lg font-bold text-gray-900 dark:text-gray-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${isCompanyRemoved ? 'line-through opacity-70' : ''
+                    <h3 className={`text-lg font-bold text-gray-900 dark:text-gray-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${isCompanyRemoved && !isInExternalAdmin ? 'line-through opacity-70' : ''
                         }`}>
                         {companyName}
                     </h3>
@@ -56,6 +90,39 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
                         NZBN: {nzbn}
                     </p>
                 </div>
+            </div>
+
+            {/* Status Alerts */}
+            <div className="space-y-1.5 mb-3">
+                {/* External Administration Alert */}
+                {isInExternalAdmin && externalAdminType && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
+                        <AlertTriangle size={14} className="text-orange-600 dark:text-orange-400 flex-shrink-0" />
+                        <span className="text-xs font-bold text-orange-700 dark:text-orange-300">
+                            ⚠ {externalAdminType}
+                        </span>
+                    </div>
+                )}
+
+                {/* Removal In Progress Alert */}
+                {removalCommenced && !isCompanyRemoved && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                        <Shield size={14} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                        <span className="text-xs font-bold text-amber-700 dark:text-amber-300">
+                            📋 Removal in Progress
+                        </span>
+                    </div>
+                )}
+
+                {/* Historic Insolvency Flag (for removed companies) */}
+                {isCompanyRemoved && hasHistoricInsolvency && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                        <AlertTriangle size={14} className="text-red-500 dark:text-red-400 flex-shrink-0" />
+                        <span className="text-xs font-semibold text-red-600 dark:text-red-300">
+                            Previously {historicInsolvencyType ? `In ${historicInsolvencyType}` : 'Insolvent'}
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* Roles */}
@@ -114,11 +181,8 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
 
             {/* Footer */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-700">
-                <span className={`text-xs font-medium px-2 py-1 rounded ${status === 'REGISTERED'
-                        ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 line-through'
-                    }`}>
-                    {status}
+                <span className={`text-xs font-medium px-2 py-1 rounded ${getStatusBadgeClass()}`}>
+                    {getDisplayStatus()}
                 </span>
                 <span className="text-xs text-blue-600 dark:text-blue-400 group-hover:underline font-medium">
                     View org chart →

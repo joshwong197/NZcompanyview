@@ -1,14 +1,21 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { Building2, User, Users } from 'lucide-react';
+import { Building2, User, Users, AlertTriangle, Shield } from 'lucide-react';
 import { NodeData } from '../types';
 
 export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
-  // Calculate dynamic width based on label length
+  // Calculate dynamic width based on label length and badges
   const labelLength = data.label?.length || 0;
+
+  // Extra width if badges exist
+  let extraWidth = 0;
+  if (data.isInExternalAdmin) extraWidth += 140;
+  if (data.removalCommenced) extraWidth += 100;
+  if (data.hasHistoricInsolvency) extraWidth += 160;
+
   const minWidth = 180;
-  const maxWidth = 400;
-  const dynamicWidth = Math.min(maxWidth, Math.max(minWidth, labelLength * 8 + 60));
+  const maxWidth = 450;
+  const dynamicWidth = Math.min(maxWidth, Math.max(minWidth, (labelLength * 8 + 60) + (extraWidth > 0 ? extraWidth / 1.5 : 0)));
 
   const isHighlighted = data.isHighlighted;
   const isTarget = data.isTarget;
@@ -43,16 +50,49 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
             <p className="text-xs text-blue-600 dark:text-blue-300 font-mono mt-0.5">
               {data.nzbn ? `NZBN: ${data.nzbn}` : 'Overseas / Unreg'}
             </p>
-            {data.status && (
-              <span className={`
-                inline-block mt-2 px-2 py-0.5 text-[10px] uppercase tracking-wide rounded-full font-bold
-                ${data.status.toLowerCase().includes('registered')
-                  ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-400'
-                  : 'bg-red-100 dark:bg-red-900/60 text-red-700 dark:text-red-400'}
-              `}>
-                {data.status}
-              </span>
-            )}
+            {/* Status Badge */}
+            <div className="flex flex-wrap gap-1 mt-2">
+              {data.status && (
+                <span className={`
+                  inline-block px-2 py-0.5 text-[10px] uppercase tracking-wide rounded-full font-bold max-w-full truncate
+                  ${data.status.toLowerCase().includes('registered')
+                    ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-400'
+                    : 'bg-red-100 dark:bg-red-900/60 text-red-700 dark:text-red-400'}
+                `} title={data.status}>
+                  {data.status}
+                </span>
+              )}
+
+              {/* External Administration Alert */}
+              {data.isInExternalAdmin && data.externalAdminType && (
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-800 shrink-0" title={data.externalAdminType}>
+                  <AlertTriangle size={10} className="text-orange-600 dark:text-orange-400" />
+                  <span className="text-[9px] font-bold text-orange-700 dark:text-orange-300">
+                    {data.externalAdminType.toUpperCase()}
+                  </span>
+                </div>
+              )}
+
+              {/* Removal In Progress Alert */}
+              {data.removalCommenced && (
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-800 shrink-0" title="Removal in Progress">
+                  <Shield size={10} className="text-amber-600 dark:text-amber-400" />
+                  <span className="text-[9px] font-bold text-amber-700 dark:text-amber-300">
+                    REMOVAL
+                  </span>
+                </div>
+              )}
+
+              {/* Historic Insolvency Flag (for removed companies) */}
+              {data.hasHistoricInsolvency && (
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 border border-red-200 dark:border-red-800 shrink-0" title={`Previously in ${data.historicInsolvencyType}`}>
+                  <AlertTriangle size={10} className="text-red-600 dark:text-red-400" />
+                  <span className="text-[9px] font-bold text-red-700 dark:text-red-300">
+                    PREV: {data.historicInsolvencyType?.toUpperCase() || 'INSOLVENT'}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
