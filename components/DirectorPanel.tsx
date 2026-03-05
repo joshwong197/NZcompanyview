@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, User, ChevronLeft } from 'lucide-react';
+import { X, User, ChevronLeft, Search } from 'lucide-react';
 
 interface Director {
     firstName?: string;
@@ -17,6 +17,7 @@ interface DirectorPanelProps {
     directors: Director[];
     position: { x: number; y: number };
     onClose: () => void;
+    onSearchPerson?: (name: string) => void;
 }
 
 export const DirectorPanel: React.FC<DirectorPanelProps> = ({
@@ -24,6 +25,7 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
     directors,
     position,
     onClose,
+    onSearchPerson,
 }) => {
     return (
         <>
@@ -106,6 +108,18 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
                                                         </span>
                                                     )}
                                                 </div>
+                                                {onSearchPerson && !dir.isCorporate && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onSearchPerson(fullName);
+                                                        }}
+                                                        className="shrink-0 p-1 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-500 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                                                        title={`Search for ${fullName}`}
+                                                    >
+                                                        <Search size={14} />
+                                                    </button>
+                                                )}
 
                                                 {dir.designation && (
                                                     <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">

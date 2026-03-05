@@ -236,32 +236,23 @@ function App() {
         searchByPersonName(personName, config.companiesKey, handleLog)
       ];
 
-      // Only search disqualified if key is present
-      if (config.disqualifiedDirectorsKey) {
-        // Run in parallel
-        searchPromises.push(
-          searchDisqualifiedDirectors(personName, config, handleLog)
-            .catch(err => {
-              console.warn("Disqualified Search failed", err);
-              return { roles: [] }; // Fail silently for this part if error
-            })
-        );
-      } else {
-        searchPromises.push(Promise.resolve({ roles: [] }));
-      }
+      // Always search disqualified directors (proxy handles key resolution)
+      searchPromises.push(
+        searchDisqualifiedDirectors(personName, config, handleLog)
+          .catch(err => {
+            console.warn("Disqualified Search failed", err);
+            return { roles: [] };
+          })
+      );
 
-      // Only search insolvency if key is present
-      if (config.insolvencyKey) {
-        searchPromises.push(
-          searchInsolvency(personName, config, handleLog)
-            .catch(err => {
-              console.warn("Insolvency Search failed", err);
-              return { searchResults: [] }; // Fail silently for this part if error
-            })
-        );
-      } else {
-        searchPromises.push(Promise.resolve({ searchResults: [] }));
-      }
+      // Always search insolvency (proxy handles key resolution)
+      searchPromises.push(
+        searchInsolvency(personName, config, handleLog)
+          .catch(err => {
+            console.warn("Insolvency Search failed", err);
+            return { searchResults: [] };
+          })
+      );
 
       const [personResults, disqualifiedResults, insolvencyResults] = await Promise.all(searchPromises);
 
@@ -307,7 +298,7 @@ function App() {
         setActiveMainTab('individual');
 
         // Async NZBN enrichment for company statuses
-        if (config.nzbnKey && personResults.length > 0) {
+        if (personResults.length > 0) {
           enrichCompanyResults(personResults, config, handleLog).then(enrichedResults => {
             setIndividualTabs(prev => prev.map(t =>
               t.id === tabId ? { ...t, personResults: enrichedResults, isEnriching: false } : t
@@ -1488,6 +1479,12 @@ function App() {
                 position={directorPanel.position}
                 directors={directorPanel.directors}
                 onClose={() => setDirectorPanel(null)}
+                onSearchPerson={(name: string) => {
+                  setDirectorPanel(null);
+                  setSearchMode('person');
+                  setSearchQuery(name);
+                  handlePersonSearch(name);
+                }}
               />
             )}
 
