@@ -1,7 +1,6 @@
 import { CompaniesRoleSearchResult, PersonCompanyResult, LogEntry } from '../types';
 
-// Correct URLs from OpenAPI spec (Companies-entity-role-search-v3.json)
-const BASE_URL_SANDBOX = 'https://api.business.govt.nz/sandbox';
+// Production URL (no longer used directly - routed through /api/proxy)
 const BASE_URL_PROD = 'https://api.business.govt.nz/gateway';
 
 /**

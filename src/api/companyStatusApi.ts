@@ -53,16 +53,16 @@ async function fetchCompanyStatus(
     hasHistoricInsolvency: boolean;
     historicInsolvencyType?: string;
 } | null> {
-    const envPath = 'gateway';
-    const baseUrl = `${BASE_API_URL}/${envPath}${API_PATHS.nzbn}`;
-    const url = `${baseUrl}/entities/${nzbn}`;
+    // Use secure proxy
+    const proxyPath = `${API_PATHS.nzbn}/entities/${nzbn}`;
+    const url = `/api/proxy?path=${encodeURIComponent(proxyPath)}`;
 
     if (logger) {
         logger({
             timestamp: new Date().toISOString(),
             method: 'GET',
-            url,
-            headers: { 'Ocp-Apim-Subscription-Key': config.nzbnKey.substring(0, 4) + '****' },
+            url: proxyPath,
+            headers: { 'x-user-api-key': config.nzbnKey ? config.nzbnKey.substring(0, 4) + '****' : 'Using Default' },
             status: 0,
             message: `Fetching company status for ${nzbn}...`
         });
@@ -71,7 +71,8 @@ async function fetchCompanyStatus(
     try {
         const response = await fetch(url, {
             headers: {
-                'Ocp-Apim-Subscription-Key': config.nzbnKey,
+                'x-user-api-key': config.nzbnKey || '',
+                'x-api-type': 'nzbn',
                 'Accept': 'application/json'
             }
         });
@@ -150,10 +151,12 @@ async function fetchCompanyStatus(
         // we can fetch the entity status history to see if it was previously in liquidation/receivership.
         if (isRemoved && !hasHistoricInsolvency) {
             try {
-                const historyUrl = `${url}/history/entity-statuses`;
+                const historyProxyPath = `${API_PATHS.nzbn}/entities/${nzbn}/history/entity-statuses`;
+                const historyUrl = `/api/proxy?path=${encodeURIComponent(historyProxyPath)}`;
                 const historyResponse = await fetch(historyUrl, {
                     headers: {
-                        'Ocp-Apim-Subscription-Key': config.nzbnKey,
+                        'x-user-api-key': config.nzbnKey || '',
+                        'x-api-type': 'nzbn',
                         'Accept': 'application/json'
                     }
                 });

@@ -17,15 +17,16 @@ export async function fetchDirectorsFromRolesEndpoint(
     baseUrl: string
 ): Promise<Director[]> {
     try {
-        // Use the /entities/{nzbn}/roles endpoint
-        const rolesUrl = `${baseUrl}/entities/${nzbn}/roles`;
+        const proxyPath = `/nzbn/v5/entities/${nzbn}/roles`;
+        const rolesUrl = `/api/proxy?path=${encodeURIComponent(proxyPath)}`;
 
-        console.log(`Fetching directors from: ${rolesUrl}`);
+        console.log(`Fetching directors from proxy for: ${nzbn}`);
 
         const response = await fetch(rolesUrl, {
             method: 'GET',
             headers: {
-                'Ocp-Apim-Subscription-Key': apiKey,
+                'x-user-api-key': apiKey || '',
+                'x-api-type': 'nzbn',
                 'Accept': 'application/json'
             }
         });

@@ -34,7 +34,6 @@ const DEFAULT_CONFIG: ApiConfig = {
   companiesKey: '',
   disqualifiedDirectorsKey: '',
   insolvencyKey: '',
-  environment: 'sandbox',
 };
 
 const nodeTypes = {
@@ -925,16 +924,14 @@ function App() {
     setContextMenu(null);
 
     try {
-      const envPath = config.environment === 'prod' ? 'gateway' : 'sandbox';
-      const baseUrl = `${BASE_API_URL}/${envPath}${API_PATHS.nzbn}`;
-
-      // Fetch entity details which already contains roles
-      const url = `${baseUrl}/entities/${nzbn}`;
-      console.log(`Fetching entity details with roles from: ${url}`);
+      // Use secure proxy
+      const proxyPath = `${API_PATHS.nzbn}/entities/${nzbn}`;
+      const url = `/api/proxy?path=${encodeURIComponent(proxyPath)}`;
 
       const response = await fetch(url, {
         headers: {
-          'Ocp-Apim-Subscription-Key': config.nzbnKey,
+          'x-user-api-key': config.nzbnKey || '',
+          'x-api-type': 'nzbn',
           'Accept': 'application/json'
         }
       });

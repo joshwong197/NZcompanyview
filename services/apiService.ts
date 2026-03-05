@@ -391,7 +391,7 @@ class OrgSpider {
 
             const diagnosticMsg = orgShareholders.length > 0
                 ? `Found ${orgShareholders.length} OrganisationShareholder roles using name "${usedName}".`
-                : `Diagnostic: No OrganisationShareholder roles found for "${ownerName}" (tried: "${usedName}") in ${this.config.environment}.`;
+                : `Diagnostic: No OrganisationShareholder roles found for "${ownerName}" (tried: "${usedName}") in production.`;
             onDebug('downstream', results, diagnosticMsg);
 
             onDebug('audit', {
@@ -819,9 +819,11 @@ async function fetchEntityDetails(nzbn: string, config: ApiConfig, baseUrl: stri
         // HYBRID: Also fetch sourceRegisterUniqueId from search endpoint
         // The full endpoint doesn't return this field, but we need it for "View on Register"
         try {
-            const searchUrl = `${baseUrl}/entities?search-term=${encodeURIComponent(nzbn)}&page-size=1`;
+            const searchProxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodeURIComponent(nzbn)}&page-size=1`;
+            const searchUrl = `${baseUrl}?path=${encodeURIComponent(searchProxyPath)}`;
             const searchRes = await safeFetch(searchUrl, {
-                'Ocp-Apim-Subscription-Key': config.nzbnKey,
+                'x-user-api-key': config.nzbnKey || '',
+                'x-api-type': 'nzbn',
                 'Accept': 'application/json'
             }, logger);
 
