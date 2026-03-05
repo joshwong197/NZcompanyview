@@ -8,9 +8,9 @@
 
 ## Overview
 
-**Mitsuketa** is a powerful visual workspace designed for investigators, researchers, and corporate analysts. It leverages the New Zealand Business Number (NZBN) and Companies Office APIs to transform complex corporate data into intuitive, interactive maps.
+**Mitsuketa** is a powerful visual workspace designed for investigators, researchers, and corporate analysts. It leverages the New Zealand Business Number (NZBN), Companies Office, Insolvency Register, and Disqualified Directors APIs to transform complex corporate data into intuitive, interactive maps.
 
-Whether you're tracing ultimate holding companies or vetting an individual's corporate history, Mitsuketa provides the clarity you need to navigate the New Zealand business landscape.
+Mitsuketa is built by someone with credit management, debt recovery, insolvency & legal experience, and therefore picks up on all the exact points 1 would need to look for in those contexts. Think of it as an aggregator of all the most important parts of the available public registers.
 
 ---
 
@@ -34,7 +34,7 @@ Results are displayed in a detailed table showing company name, NZBN, role type,
 ### ⚠️ Risk Intelligence
 Mitsuketa automatically enriches results with real-time risk indicators:
 - 🔴 **External Administration**: Companies in Receivership, Liquidation, or Voluntary Administration
-- ⚫ **Removed Companies**: Companies that have been struck off the register
+- ⚫ **Removed Companies**: Companies that have been struck off the register AND companies that are about to removed from the register.
 - 🚫 **Disqualified Directors**: Cross-references the Disqualified Directors register to flag individuals banned from holding directorships
 - 📋 **Insolvency Register**: Checks the Insolvency Register for personal insolvency records associated with searched individuals
 - ⚡ **Historic Insolvency**: Detects past insolvency events even for removed companies
@@ -60,14 +60,6 @@ Export your work in multiple formats:
 - **PDF**: Print-ready PDF export
 - **JSON**: Full snapshot data for programmatic use
 
-### 🔍 Network Console
-A built-in **API Log** panel shows every request made during your session:
-- Request URL, method, and headers
-- Response status codes
-- Timing information
-
-This is useful for debugging, auditing, or understanding how the app interacts with the Government APIs.
-
 ### 🌗 Dark Mode
 Toggle between Light and Dark themes. Your preference is saved locally and persists across sessions.
 
@@ -76,7 +68,7 @@ Toggle between Light and Dark themes. Your preference is saved locally and persi
 ## 🔐 API Keys & Security
 
 ### Secure Proxy Architecture
-Mitsuketa uses a **Vercel Serverless Function** as a secure proxy for all API requests. This means:
+Mitsuketa uses a **Serverless Function** as a secure proxy for all API requests. This means:
 - **No API keys are ever exposed** in the browser or client-side code
 - All requests are routed through `/api/proxy` on the server
 - The proxy supports **Bring Your Own Key (BYOK)**: if a user provides their own key, it takes priority
@@ -86,7 +78,7 @@ Mitsuketa uses a **Vercel Serverless Function** as a secure proxy for all API re
 The proxy includes a **soft rate limit of 200 requests per minute per IP address** to protect the underlying Government API keys from abuse.
 
 ### Required API Keys
-To use Mitsuketa (either via BYOK or as Vercel environment variables), you need keys from:
+We have enabled the Serverless Function (environment variables) for all users to use Mitsuketa. However if you wish to BYOK, you need keys from:
 
 | Key | API | How to Get |
 |-----|-----|-----------|
@@ -96,48 +88,6 @@ To use Mitsuketa (either via BYOK or as Vercel environment variables), you need 
 | Insolvency Key | [Insolvency Register API](https://api.business.govt.nz/) | Same portal |
 
 > **All keys are free** to obtain from the NZ Government API portal.
-
-### Vercel Environment Variables
-If deploying to Vercel, set these in your project's **Settings → Environment Variables**:
-- `ORG_NZBN_KEY`
-- `ORG_COMPANIES_KEY`
-- `ORG_DISQUALIFIED_KEY`
-- `ORG_INSOLVENCY_KEY`
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- [Node.js](https://nodejs.org/) (v18+)
-- A [Vercel](https://vercel.com/) account (free Hobby plan works)
-- API keys from the [NZ Business API Portal](https://api.business.govt.nz/)
-
-### Local Development
-
-```bash
-# Clone the repository
-git clone https://github.com/joshwong197/NZcompanyview.git
-cd NZcompanyview
-
-# Install dependencies
-npm install
-
-# Create a .env.local file with your API keys
-# (See .env.local.example for the format)
-
-# Run with Vercel dev server (required for proxy functions)
-npx vercel dev
-```
-
-> **Important**: Use `npx vercel dev` instead of `npm run dev` to ensure the Vercel serverless functions (API proxy) work correctly during local development.
-
-### Production Deployment
-
-1. Push your code to GitHub
-2. Connect your GitHub repo to Vercel
-3. Add your API keys as Environment Variables in the Vercel dashboard
-4. Vercel will automatically build and deploy on every push to `main`
 
 ---
 
@@ -195,5 +145,5 @@ This project is for personal and educational use. All data is sourced from publi
 
 <p align="center">
   <strong>Mitsuketa</strong> — 見つけた<br/>
-  <em>Built with 🧠 and ☕ in New Zealand</em>
+  <em>Built in New Zealand, shout out to the LegalQuants</em>
 </p>
