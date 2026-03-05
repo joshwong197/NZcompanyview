@@ -263,7 +263,18 @@ function App() {
       ) {
         setError(`No directorship, shareholding, disqualification, or insolvency records found for "${personName}".`);
       } else {
-        setPersonSearchResults(personResults);
+        // Await NZBN enrichment for company statuses before updating UI
+        let finalPersonResults = personResults;
+        if (personResults.length > 0) {
+          try {
+            finalPersonResults = await enrichCompanyResults(personResults, config, handleLog);
+            console.log(`✅ Enrichment complete for "${personName}"`);
+          } catch (err) {
+            console.warn('Enrichment failed:', err);
+          }
+        }
+
+        setPersonSearchResults(finalPersonResults);
         setPersonSearchName(personName);
 
         if (disqualifiedResults.roles && disqualifiedResults.roles.length > 0) {
@@ -276,7 +287,7 @@ function App() {
           setInsolvencyMatches(insolvencyResults.searchResults);
         }
 
-        console.log(`✅ Found ${personResults.length} companies for "${personName}"`);
+        console.log(`✅ Found ${finalPersonResults.length} companies for "${personName}"`);
 
         // Create a new Individual tab
         const tabId = `ind-${Date.now()}`;
@@ -284,10 +295,10 @@ function App() {
           id: tabId,
           label: personName,
           searchQuery: personName,
-          personResults: personResults,
+          personResults: finalPersonResults,
           disqualifiedMatches: disqualifiedResults.roles || [],
           insolvencyMatches: insolvencyResults.searchResults || [],
-          isEnriching: true
+          isEnriching: false
         };
 
         setIndividualTabs(prev => {
@@ -296,26 +307,6 @@ function App() {
         });
         setActiveIndividualTabId(tabId);
         setActiveMainTab('individual');
-
-        // Async NZBN enrichment for company statuses
-        if (personResults.length > 0) {
-          enrichCompanyResults(personResults, config, handleLog).then(enrichedResults => {
-            setIndividualTabs(prev => prev.map(t =>
-              t.id === tabId ? { ...t, personResults: enrichedResults, isEnriching: false } : t
-            ));
-            // Also update the legacy state if this tab is still active
-            setPersonSearchResults(enrichedResults);
-          }).catch(err => {
-            console.warn('Enrichment failed:', err);
-            setIndividualTabs(prev => prev.map(t =>
-              t.id === tabId ? { ...t, isEnriching: false } : t
-            ));
-          });
-        } else {
-          setIndividualTabs(prev => prev.map(t =>
-            t.id === tabId ? { ...t, isEnriching: false } : t
-          ));
-        }
       }
     } catch (err: any) {
       setError(err.message || "Person search failed.");

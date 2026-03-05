@@ -55,18 +55,17 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
         return status;
     };
 
-    // Determine status badge styling
     const getStatusBadgeClass = () => {
-        if (isInExternalAdmin) {
-            return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700';
+        if (isInExternalAdmin || isCompanyRemoved) {
+            return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700 font-bold';
         }
         if (removalCommenced) {
-            return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700';
+            return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 font-bold';
         }
         if (status === 'REGISTERED') {
-            return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+            return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-bold';
         }
-        return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 line-through';
+        return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-bold';
     };
 
     return (
@@ -94,16 +93,6 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
 
             {/* Status Alerts */}
             <div className="space-y-1.5 mb-3">
-                {/* External Administration Alert */}
-                {isInExternalAdmin && externalAdminType && (
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
-                        <AlertTriangle size={14} className="text-orange-600 dark:text-orange-400 flex-shrink-0" />
-                        <span className="text-xs font-bold text-orange-700 dark:text-orange-300">
-                            ⚠ {externalAdminType}
-                        </span>
-                    </div>
-                )}
-
                 {/* Removal In Progress Alert */}
                 {removalCommenced && !isCompanyRemoved && (
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
@@ -119,7 +108,7 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
                         <AlertTriangle size={14} className="text-red-500 dark:text-red-400 flex-shrink-0" />
                         <span className="text-xs font-semibold text-red-600 dark:text-red-300">
-                            Previously {historicInsolvencyType ? `In ${historicInsolvencyType}` : 'Insolvent'}
+                            Previously In {historicInsolvencyType ? historicInsolvencyType.replace(/^in\s+/i, '') : 'Insolvency'}
                         </span>
                     </div>
                 )}
