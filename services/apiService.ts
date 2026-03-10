@@ -30,6 +30,9 @@ class OrgSpider {
     // OPTIMIZATION: Request timing for smart rate limiting
     private requestTimes: number[];
 
+    // OPTIMIZATION: Roles API response cache (prevents redundant ~11s calls)
+    private rolesCache: Map<string, CompaniesRoleSearchResult>;
+
     constructor(config: ApiConfig, logger?: LoggerCallback) {
         this.config = config;
         this.nzbnBaseUrl = `/api/proxy`;
@@ -40,6 +43,7 @@ class OrgSpider {
         this.logger = logger;
         this.entityCache = new Map();
         this.requestTimes = [];
+        this.rolesCache = new Map();
     }
 
     // OPTIMIZATION #2: Smart rate limiting
@@ -89,6 +93,19 @@ class OrgSpider {
             timestamp: Date.now()
         });
 
+        return result;
+    }
+
+    // OPTIMIZATION #4: Roles API response caching
+    // Prevents redundant ~11s calls when the same entity name is searched across phases
+    private async getCachedRoles(name: string): Promise<CompaniesRoleSearchResult> {
+        const cacheKey = name.toUpperCase().trim();
+        if (this.rolesCache.has(cacheKey)) {
+            console.log(`💾 Roles cache hit for "${name}"`);
+            return this.rolesCache.get(cacheKey)!;
+        }
+        const result = await fetchRolesByEntityName(name, this.config, this.companiesBaseUrl, this.logger);
+        this.rolesCache.set(cacheKey, result);
         return result;
     }
 
@@ -146,41 +163,28 @@ class OrgSpider {
 
         console.log(`Found ${parentsToExpand.length} parents to expand`);
 
-        // OPTIMIZATION #1: Process parent expansion in parallel or sequential
-        if (ENABLE_PARALLEL_PARENTS && parentsToExpand.length > 0) {
-            console.log(`🚀 PARALLEL MODE: Expanding ${parentsToExpand.length} parents simultaneously`);
+        // OPTIMIZATION: Run Phase 2 (parent expansion) and Phase 3 (root downstream) IN PARALLEL.
+        // They crawl different entities and the shared visited Set is safe under JS async concurrency.
+        // This saves ~11s by overlapping the slow Roles API calls.
+        console.log('=== PHASE 2+3: Expanding Parents + Root Downstream IN PARALLEL ===');
 
-            await Promise.all(parentsToExpand.map(async (parentNzbn) => {
-                const parentNode = this.nodes.get(parentNzbn);
-                if (parentNode && parentNode.data.type === NodeType.COMPANY && parentNode.data.nzbn) {
-                    console.log(`📊 Expanding full structure for parent: ${parentNode.data.label}`);
+        const phase2Promises = parentsToExpand.map(async (parentNzbn) => {
+            const parentNode = this.nodes.get(parentNzbn);
+            if (parentNode && parentNode.data.type === NodeType.COMPANY && parentNode.data.nzbn) {
+                console.log(`📊 Expanding full structure for parent: ${parentNode.data.label}`);
 
-                    const cleanName = parentNode.data.entityName ||
-                        parentNode.data.label.replace(/^\d+\s*-\s*/, '').trim();
+                const cleanName = parentNode.data.entityName ||
+                    parentNode.data.label.replace(/^\d+\s*-\s*/, '').trim();
 
-                    console.log(`🔍 API search name: "${cleanName}" (original label: "${parentNode.data.label}")`);
-                    await this.crawlDownstream(parentNzbn, cleanName, 0, onDebug);
-                }
-            }));
-        } else {
-            // Fallback: Sequential processing
-            for (const parentNzbn of parentsToExpand) {
-                const parentNode = this.nodes.get(parentNzbn);
-                if (parentNode && parentNode.data.type === NodeType.COMPANY && parentNode.data.nzbn) {
-                    console.log(`📊 Expanding full structure for parent: ${parentNode.data.label}`);
-
-                    const cleanName = parentNode.data.entityName ||
-                        parentNode.data.label.replace(/^\d+\s*-\s*/, '').trim();
-
-                    console.log(`🔍 API search name: "${cleanName}" (original label: "${parentNode.data.label}")`);
-                    await this.crawlDownstream(parentNzbn, cleanName, 0, onDebug);
-                }
+                console.log(`🔍 API search name: "${cleanName}" (original label: "${parentNode.data.label}")`);
+                await this.crawlDownstream(parentNzbn, cleanName, 0, onDebug);
             }
-        }
+        });
 
-        // PHASE 3: Crawl downstream from original root
-        console.log('=== PHASE 3: Crawling Downstream from Root ===');
-        await this.crawlDownstream(rootDetails.nzbn, rootDetails.entityName, 0, onDebug);
+        // Phase 3 runs IN PARALLEL with all Phase 2 parent expansions
+        const phase3Promise = this.crawlDownstream(rootDetails.nzbn, rootDetails.entityName, 0, onDebug);
+
+        await Promise.all([...phase2Promises, phase3Promise]);
 
         if (onDebug) {
             onDebug('audit', {
@@ -215,6 +219,22 @@ class OrgSpider {
         }
 
         if (shareholdings && shareholdings.shareAllocation) {
+            // OPTIMIZATION: Prefetch all corporate parent statuses in parallel.
+            // This populates the entity cache so the sequential loop below gets instant cache hits.
+            const parentNzbnsToPreFetch = shareholdings.shareAllocation
+                .flatMap((alloc: any) => alloc.shareholder || [])
+                .filter((h: any) => h.otherShareholder?.nzbn)
+                .map((h: any) => h.otherShareholder!.nzbn as string);
+
+            if (parentNzbnsToPreFetch.length > 1) {
+                console.log(`🚀 Prefetching ${parentNzbnsToPreFetch.length} parent statuses in parallel`);
+                await Promise.all(parentNzbnsToPreFetch.map(nzbn =>
+                    this.getCachedOrFetch(nzbn, () =>
+                        fetchEntitySummaryLight(nzbn, this.config, this.nzbnBaseUrl, this.logger)
+                    ).catch(e => console.warn(`Prefetch failed for ${nzbn}`, e))
+                ));
+            }
+
             for (const alloc of shareholdings.shareAllocation) {
 
                 for (const holder of alloc.shareholder) {
@@ -240,14 +260,18 @@ class OrgSpider {
                         // FILTER: Check if parent is removed before adding (OPTIMIZED)
                         if (parentNzbn) {
                             try {
-                                // OPTIMIZATION: Use lightweight endpoint (gets status AND sourceRegisterUniqueId)
-                                const parentData = await fetchEntityStatusOnly(parentNzbn, this.config, this.nzbnBaseUrl, this.logger);
-                                const isInactive = parentData.status.toLowerCase().includes('removed') ||
-                                    parentData.status.toLowerCase().includes('deleted') ||
-                                    parentData.status.toLowerCase().includes('liquidat');
+                                // OPTIMIZATION: Use cached lightweight endpoint
+                                const parentData = await this.getCachedOrFetch(
+                                    parentNzbn,
+                                    () => fetchEntitySummaryLight(parentNzbn, this.config, this.nzbnBaseUrl, this.logger)
+                                );
+
+                                const isInactive = parentData.entityStatusDescription.toLowerCase().includes('removed') ||
+                                    parentData.entityStatusDescription.toLowerCase().includes('deleted') ||
+                                    parentData.entityStatusDescription.toLowerCase().includes('liquidat');
 
                                 if (isInactive && !this.config.includeInactive) {
-                                    console.log(`[Parent: ${holderLabel}] ⏭️ Skipped: Entity is ${parentData.status} (includeInactive=false)`);
+                                    console.log(`[Parent: ${holderLabel}] ⏭️ Skipped: Entity is ${parentData.entityStatusDescription} (includeInactive=false)`);
                                     continue; // Skip BEFORE marking as visited
                                 }
 
@@ -284,16 +308,15 @@ class OrgSpider {
                     if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
                         this.visited.add(parentNzbn);
                         try {
-                            // Logic Point 2 (Siblings): When we identify a Parent, find what else it owns.
-                            if (holderLabel) {
-                                await this.crawlSiblings(parentNzbn, holderLabel, details.nzbn);
-                            }
+                            // OPTIMIZATION: Removed crawlSiblings here - Phase 2's crawlDownstream
+                            // discovers all siblings with better data (share percentages, strict matching).
+                            // This saves ~11s per parent by eliminating a redundant Roles API call.
 
-                            // Then recurse upstream
+                            // Recurse upstream
                             const parentDetails = await fetchEntityDetails(parentNzbn, this.config, this.nzbnBaseUrl, this.logger);
                             await this.crawlUpstream(parentDetails, depth + 1);
                         } catch (e) {
-                            console.warn(`Failed upstream/sibling fetch for ${parentNzbn}`, e);
+                            console.warn(`Failed upstream fetch for ${parentNzbn}`, e);
                         }
                     }
                 }
@@ -322,13 +345,22 @@ class OrgSpider {
 
                     if (parentNzbn) {
                         try {
-                            const parentData = await fetchEntityStatusOnly(parentNzbn, this.config, this.nzbnBaseUrl, this.logger);
-                            const isInactive = parentData.status.toLowerCase().includes('removed') ||
-                                parentData.status.toLowerCase().includes('deleted') ||
-                                parentData.status.toLowerCase().includes('liquidat');
+                            const parentData = await this.getCachedOrFetch(
+                                parentNzbn,
+                                () => fetchEntitySummaryLight(parentNzbn, this.config, this.nzbnBaseUrl, this.logger)
+                            );
+
+                            // 🚀 FIX: IF holderLabel is Unknown, populate it now from the actual registry summary:
+                            if (holderLabel === 'Unknown Entity' && parentData.entityName) {
+                                holderLabel = parentData.entityName;
+                            }
+
+                            const isInactive = parentData.entityStatusDescription.toLowerCase().includes('removed') ||
+                                parentData.entityStatusDescription.toLowerCase().includes('deleted') ||
+                                parentData.entityStatusDescription.toLowerCase().includes('liquidat');
 
                             if (isInactive && !this.config.includeInactive) {
-                                console.log(`[Role Entity: ${holderLabel}] ⏭️ Skipped: Entity is ${parentData.status}`);
+                                console.log(`[Role Entity: ${holderLabel}] ⏭️ Skipped: Entity is ${parentData.entityStatusDescription}`);
                                 continue;
                             }
                             parentSourceRegisterUniqueId = parentData.sourceRegisterUniqueId;
@@ -362,13 +394,11 @@ class OrgSpider {
                 if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
                     this.visited.add(parentNzbn);
                     try {
-                        if (holderLabel) {
-                            await this.crawlSiblings(parentNzbn, holderLabel, details.nzbn);
-                        }
+                        // OPTIMIZATION: Removed crawlSiblings here - Phase 2 handles sibling discovery.
                         const parentDetails = await fetchEntityDetails(parentNzbn, this.config, this.nzbnBaseUrl, this.logger);
                         await this.crawlUpstream(parentDetails, depth + 1);
                     } catch (e) {
-                        console.warn(`Failed upstream/sibling fetch for role ${parentNzbn}`, e);
+                        console.warn(`Failed upstream fetch for role ${parentNzbn}`, e);
                     }
                 }
             }
@@ -378,69 +408,16 @@ class OrgSpider {
     // --- Downstream: Find who the target owns ---
     private async crawlDownstream(ownerNzbn: string, ownerName: string, depth: number = 0, onDebug?: DebugCallback) {
         if (depth > 2) return;
-        await delay(150);
+        // OPTIMIZATION: Use smart rate limiting instead of hardcoded 150ms delay.
+        // Since Roles API takes ~11s per call, we never hit 10 req/s — this becomes a no-op.
+        await this.smartDelay();
 
         // "Use the Legal Name... exactly as returned"
         // We start with the ownerName which matches the entityName from NZBN details.
-        // We keep variations as a fallback for Sandbox quirks but prioritize exact match.
 
-        const nameVariations = [ownerName];
-
-        // Fallback variations (Sandbox only, ideally)
-        const cleaned = ownerName.replace(/(\s+Limited|\s+Ltd\.?|\s+Tapui(?:\s+Limited)?)$/i, '').trim();
-        if (cleaned !== ownerName && cleaned.length > 0) {
-            nameVariations.push(cleaned);
-        }
-
-        const words = cleaned.split(/\s+/);
-        if (words.length >= 2) {
-            const twoWords = words.slice(0, 2).join(' ');
-            if (twoWords !== cleaned && twoWords !== ownerName) {
-                nameVariations.push(twoWords);
-            }
-        }
-
-        let results: CompaniesRoleSearchResult = { roles: [], status: 0 };
+        // OPTIMIZATION: Use cached roles to avoid redundant ~11s API calls
+        let results: CompaniesRoleSearchResult = await this.getCachedRoles(ownerName);
         let usedName = ownerName;
-
-        // OPTIMIZATION #4: Parallel role searches for all name variations
-        if (ENABLE_PARALLEL_ROLE_SEARCHES && nameVariations.length > 1) {
-            console.log(`🚀 PARALLEL: Fetching ${nameVariations.length} name variations simultaneously`);
-
-            // Fetch all variations in parallel
-            const allResults = await Promise.all(
-                nameVariations.map(async (nameVariant) => ({
-                    name: nameVariant,
-                    result: await fetchRolesByEntityName(nameVariant, this.config, this.companiesBaseUrl, this.logger)
-                }))
-            );
-
-            // Find first variation with valid hits
-            for (const { name, result } of allResults) {
-                const validHits = result.roles.filter(r => r.roleType === 'OrganisationShareholder');
-                if (validHits.length > 0) {
-                    results = result;
-                    usedName = name;
-                    break;
-                }
-            }
-
-            // If no valid hits in any variation, use first result
-            if (results.roles.length === 0 && allResults.length > 0) {
-                results = allResults[0].result;
-                usedName = allResults[0].name;
-            }
-        } else {
-            // Fallback: Sequential search (original behavior)
-            for (const nameVariant of nameVariations) {
-                usedName = nameVariant;
-                results = await fetchRolesByEntityName(nameVariant, this.config, this.companiesBaseUrl, this.logger);
-
-                // STRICT CHECK: Only OrganisationShareholder represents corporate subsidiaries
-                const validHits = results.roles.filter(r => r.roleType === 'OrganisationShareholder');
-                if (validHits.length > 0) break;
-            }
-        }
 
         // ---------------- LOGGING START ----------------
         console.log(`%c[Downstream] Raw API Response for ${usedName}:`, "color: #00ffff; font-weight: bold", results);
@@ -768,10 +745,9 @@ async function fetchEntityDetailsFull(nzbn: string, config: ApiConfig, baseUrl: 
 
 // OPTIMIZED FUNCTION (Default for current graphs)
 // Fetches minimal entity data (name, nzbn, status) for 70-80% speed improvement
-// Returns only what we need for graph building, not full historical details
+// Uses direct primary key lookup instead of slow full-text search
 async function fetchEntitySummary(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ entityName: string, nzbn: string, entityStatusDescription: string, sourceRegisterUniqueId?: string }> {
-    // Use search endpoint with NZBN as search term - returns minimal data
-    const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodeURIComponent(nzbn)}&page-size=1`;
+    const proxyPath = `${API_PATHS.nzbn}/entities/${encodeURIComponent(nzbn)}`;
     const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
     const res = await safeFetch(url, {
         'x-user-api-key': config.nzbnKey || '',
@@ -786,26 +762,22 @@ async function fetchEntitySummary(nzbn: string, config: ApiConfig, baseUrl: stri
     }
 
     const data = await res.json();
-    const items = data.items || [];
-
-    if (items.length === 0) {
-        throw new Error(`Entity ${nzbn} not found.`);
-    }
 
     // Return just the minimal fields we need
+    // Note: Full endpoint uses sourceRegisterUniqueIdentifier, search uses sourceRegisterUniqueId
     return {
-        entityName: items[0].entityName,
-        nzbn: items[0].nzbn,
-        entityStatusDescription: items[0].entityStatusDescription || 'Unknown',
-        sourceRegisterUniqueId: items[0].sourceRegisterUniqueId
+        entityName: data.entityName,
+        nzbn: data.nzbn,
+        entityStatusDescription: data.entityStatusDescription || 'Unknown',
+        sourceRegisterUniqueId: data.sourceRegisterUniqueId || data.sourceRegisterUniqueIdentifier
     };
 }
 
 // SELECTIVE OPTIMIZATION: Status-only check (for filtering)
-// Used when we only need to check if entity is removed/inactive
+// Uses direct primary key lookup instead of slow full-text search
 async function fetchEntityStatusOnly(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ status: string, sourceRegisterUniqueId?: string }> {
     try {
-        const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodeURIComponent(nzbn)}&page-size=1`;
+        const proxyPath = `${API_PATHS.nzbn}/entities/${encodeURIComponent(nzbn)}`;
         const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
         const res = await safeFetch(url, {
             'x-user-api-key': config.nzbnKey || '',
@@ -816,31 +788,23 @@ async function fetchEntityStatusOnly(nzbn: string, config: ApiConfig, baseUrl: s
         if (!res.ok) throw new Error(`Status check failed: ${res.status}`);
 
         const data = await res.json();
-        const items = data.items || [];
-
-        if (items.length === 0) throw new Error(`Entity ${nzbn} not found`);
 
         return {
-            status: items[0].entityStatusDescription || 'Unknown',
-            sourceRegisterUniqueId: items[0].sourceRegisterUniqueId
+            status: data.entityStatusDescription || 'Unknown',
+            sourceRegisterUniqueId: data.sourceRegisterUniqueId || data.sourceRegisterUniqueIdentifier
         };
     } catch (e) {
-        // Fallback to full endpoint if lightweight fails
-        console.warn(`Lightweight status check failed for ${nzbn}, falling back to full endpoint`, e);
-        const fullDetails = await fetchEntityDetailsFull(nzbn, config, baseUrl, logger);
-        return {
-            status: fullDetails.entityStatusDescription || 'Unknown',
-            sourceRegisterUniqueId: fullDetails.sourceRegisterUniqueId
-        };
+        console.warn(`Status check failed for ${nzbn}`, e);
+        return { status: 'Unknown', sourceRegisterUniqueId: undefined };
     }
 }
 
 
 // SELECTIVE OPTIMIZATION: Summary for subsidiaries (name + status only)
-// Used when we already know it's a subsidiary from Companies API
+// Uses direct primary key lookup instead of slow full-text search
 async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string }> {
     try {
-        const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodeURIComponent(nzbn)}&page-size=1`;
+        const proxyPath = `${API_PATHS.nzbn}/entities/${encodeURIComponent(nzbn)}`;
         const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
         const res = await safeFetch(url, {
             'x-user-api-key': config.nzbnKey || '',
@@ -851,24 +815,15 @@ async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl:
         if (!res.ok) throw new Error(`Summary fetch failed: ${res.status}`);
 
         const data = await res.json();
-        const items = data.items || [];
-
-        if (items.length === 0) throw new Error(`Entity ${nzbn} not found`);
 
         return {
-            entityName: items[0].entityName,
-            entityStatusDescription: items[0].entityStatusDescription || 'Unknown',
-            sourceRegisterUniqueId: items[0].sourceRegisterUniqueId
+            entityName: data.entityName,
+            entityStatusDescription: data.entityStatusDescription || 'Unknown',
+            sourceRegisterUniqueId: data.sourceRegisterUniqueId || data.sourceRegisterUniqueIdentifier
         };
     } catch (e) {
-        // Fallback to full endpoint if lightweight fails
-        console.warn(`Lightweight summary failed for ${nzbn}, falling back to full endpoint`, e);
-        const fullDetails = await fetchEntityDetailsFull(nzbn, config, baseUrl, logger);
-        return {
-            entityName: fullDetails.entityName,
-            entityStatusDescription: fullDetails.entityStatusDescription || 'Unknown',
-            sourceRegisterUniqueId: fullDetails.sourceRegisterUniqueId
-        };
+        console.warn(`Summary check failed for ${nzbn}`, e);
+        return { entityName: 'Unknown', entityStatusDescription: 'Unknown', sourceRegisterUniqueId: undefined };
     }
 }
 
@@ -890,27 +845,10 @@ async function fetchEntityDetails(nzbn: string, config: ApiConfig, baseUrl: stri
         // Use legacy full endpoint for main data
         const fullDetails = await fetchEntityDetailsFull(nzbn, config, baseUrl, logger);
 
-        // HYBRID: Also fetch sourceRegisterUniqueId from search endpoint
-        // The full endpoint doesn't return this field, but we need it for "View on Register"
-        try {
-            const searchProxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodeURIComponent(nzbn)}&page-size=1`;
-            const searchUrl = `${baseUrl}?path=${encodeURIComponent(searchProxyPath)}`;
-            const searchRes = await safeFetch(searchUrl, {
-                'x-user-api-key': config.nzbnKey || '',
-                'x-api-type': 'nzbn',
-                'Accept': 'application/json'
-            }, logger);
-
-            if (searchRes.ok) {
-                const searchData = await searchRes.json();
-                const items = searchData.items || [];
-                if (items.length > 0 && items[0].sourceRegisterUniqueId) {
-                    fullDetails.sourceRegisterUniqueId = items[0].sourceRegisterUniqueId;
-                }
-            }
-        } catch (e) {
-            console.warn(`Could not fetch sourceRegisterUniqueId for ${nzbn}`, e);
-            // Non-critical, continue without it
+        // OPTIMIZATION: The full endpoint returns sourceRegisterUniqueIdentifier (not sourceRegisterUniqueId).
+        // Map the field name instead of making a redundant second API call. Saves ~300ms per call.
+        if (!fullDetails.sourceRegisterUniqueId && (fullDetails as any).sourceRegisterUniqueIdentifier) {
+            fullDetails.sourceRegisterUniqueId = (fullDetails as any).sourceRegisterUniqueIdentifier;
         }
 
         return fullDetails;
@@ -919,7 +857,9 @@ async function fetchEntityDetails(nzbn: string, config: ApiConfig, baseUrl: stri
 
 async function fetchRolesByEntityName(name: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<CompaniesRoleSearchResult> {
     try {
-        const encodedName = encodeURIComponent(name);
+        // Enclose in double quotes to force exact match and prevent MBIE from doing slow fuzzy searching/OR matching.
+        // Without this MBIE will `OR` query every common word across 700k records, taking 30 seconds.
+        const encodedName = encodeURIComponent(`"${name}"`);
 
         // UPDATED: Strictly using verified 'role-type' (singular) and enum 'SHR' with pagination
         const proxyPath = `${API_PATHS.companies}/search?name=${encodedName}&role-type=SHR&page-size=100`;
@@ -953,7 +893,8 @@ async function fetchRolesByEntityName(name: string, config: ApiConfig, baseUrl: 
 
 async function fetchDirectorsByEntityName(name: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<CompaniesRoleSearchResult> {
     try {
-        const encodedName = encodeURIComponent(name);
+        // Enclose in double quotes to force exact match
+        const encodedName = encodeURIComponent(`"${name}"`);
         const proxyPath = `${API_PATHS.companies}/search?name=${encodedName}&role-type=DIR&page-size=50`;
         const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
@@ -982,7 +923,9 @@ async function fetchDirectorsByEntityName(name: string, config: ApiConfig, baseU
 
 export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback): Promise<EntitySearchResultItem[]> => {
     const baseUrl = `/api/proxy`;
-    const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodeURIComponent(term)}&page-size=10`;
+    // Enclose in double quotes to force exact match
+    const encodedTerm = encodeURIComponent(`"${term}"`);
+    const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodedTerm}&page-size=10`;
     const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
     const response = await safeFetch(url, {

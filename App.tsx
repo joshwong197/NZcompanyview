@@ -554,24 +554,24 @@ function App() {
         setNodes(layoutedNodes);
         setEdges(layoutedEdges);
 
-        // AUTO-TIDY: Automatically optimize layout after loading
+        // AUTO-TIDY: Optimize layout after one paint frame (not 300ms artificial delay)
         console.log('🎨 Auto-Tidy: Scheduling automatic layout optimization...');
-        setTimeout(() => {
+        requestAnimationFrame(() => {
           console.log('🎨 Auto-Tidy: Running now...');
           const optimized = tidyUpLayout(layoutedNodes, layoutedEdges);
           setNodes(optimized.nodes);
           setEdges(optimized.edges);
           console.log('✨ Auto-Tidy: Complete!');
+        });
 
-          // Background enrichment of nodes with NZBN insolvency data
-          enrichGraphNodes(processedNodes, { ...config, includeInactive }, handleLog).then(enrichedNodes => {
-            setAllNodesInMemory(enrichedNodes);
-            setNodes(prevVars => prevVars.map(n => {
-              const enriched = enrichedNodes.find(en => en.id === n.id);
-              return enriched ? { ...n, data: enriched.data } : n;
-            }) as any);
-          });
-        }, 300);
+        // OPTIMIZATION: Start enrichment immediately — don't gate behind tidy-up
+        enrichGraphNodes(processedNodes, { ...config, includeInactive }, handleLog).then(enrichedNodes => {
+          setAllNodesInMemory(enrichedNodes);
+          setNodes(prevVars => prevVars.map(n => {
+            const enriched = enrichedNodes.find(en => en.id === n.id);
+            return enriched ? { ...n, data: enriched.data } : n;
+          }) as any);
+        });
       }
     } catch (err: any) {
       setError(err.message || "Failed to fetch corporate map.");
