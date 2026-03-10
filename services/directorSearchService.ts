@@ -83,6 +83,11 @@ function processPersonSearchResults(data: CompaniesRoleSearchResult, searchName?
     // Client-side name filtering: The Companies Office API does substring matching,
     // so "Yang, Yang" returns thousands of results for anyone with "Yang" anywhere in name.
     // Filter to only roles where the person name closely matches the search query.
+    //
+    // Approach: Build all permutations of the role's name fields (first/middle/last) and
+    // check if the search terms can be matched 1-to-1 against them (greedy consume).
+    // This correctly handles "Yang, Yang" — requires BOTH first AND last to be "Yang",
+    // rejecting "Yang LIU" where only firstName matches.
     if (searchName) {
         const normalizedSearch = searchName.toLowerCase().replace(/[,.\-]/g, ' ').trim();
         const searchParts = normalizedSearch.split(/\s+/).filter(Boolean);
@@ -93,14 +98,18 @@ function processPersonSearchResults(data: CompaniesRoleSearchResult, searchName?
                 const middle = (role.middleName || '').toLowerCase().trim();
                 const last = (role.lastName || '').toLowerCase().trim();
 
-                // Build list of name parts from the API role
+                // Build a consumable list of the role's name parts
                 const nameParts = [first, middle, last].filter(Boolean);
 
-                // Every search term must match a complete name part (first, middle, or last)
-                // or be a prefix of a name part (to handle abbreviations like "Rob" → "Robert")
-                return searchParts.every(part =>
-                    nameParts.some(np => np === part || np.startsWith(part))
-                );
+                // Each search part must match a DISTINCT name part (1-to-1 matching).
+                // Copy the array so we can remove matched parts to prevent double-counting.
+                const available = [...nameParts];
+                for (const part of searchParts) {
+                    const idx = available.findIndex(np => np === part || np.startsWith(part));
+                    if (idx === -1) return false; // No match for this search part
+                    available.splice(idx, 1); // Consume the matched name part
+                }
+                return true;
             });
 
             console.log(`🎯 Name filter: ${data.roles.length} → ${roles.length} roles (search: "${searchName}")`);
