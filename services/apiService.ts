@@ -932,8 +932,13 @@ async function fetchDirectorsByEntityName(name: string, config: ApiConfig, baseU
 export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback, page: number = 0): Promise<EntitySearchResponse> => {
     const baseUrl = `/api/proxy`;
     const trimmed = term.trim();
-    // Use quoted search-term for all inputs (names, NZBNs, company/registration numbers)
-    const encodedTerm = encodeURIComponent(`"${trimmed}"`);
+    // The NZBN search-term free-text mode searches legacy numbers (company number, LP number etc).
+    // Quoting forces an exact phrase match on names only, so numeric non-NZBN inputs must be
+    // sent unquoted to hit the legacy-number index.
+    const isLegacyNumber = /^\d+$/.test(trimmed) && trimmed.length !== 13;
+    const encodedTerm = isLegacyNumber
+        ? encodeURIComponent(trimmed)
+        : encodeURIComponent(`"${trimmed}"`);
     const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodedTerm}&page-size=10&page=${page}`;
     const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
