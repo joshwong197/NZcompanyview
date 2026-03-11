@@ -1,4 +1,4 @@
-import { ApiConfig, GraphEdge, GraphNode, NodeType, NZBNFullEntity, EntitySearchResultItem, CompaniesRoleSearchResult, DebugCallback, LoggerCallback } from '../types';
+import { ApiConfig, GraphEdge, GraphNode, NodeType, NZBNFullEntity, EntitySearchResultItem, EntitySearchResponse, CompaniesRoleSearchResult, DebugCallback, LoggerCallback } from '../types';
 import { BASE_API_URL, API_PATHS } from '../constants';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -929,11 +929,11 @@ async function fetchDirectorsByEntityName(name: string, config: ApiConfig, baseU
     }
 }
 
-export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback): Promise<EntitySearchResultItem[]> => {
+export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback, page: number = 0): Promise<EntitySearchResponse> => {
     const baseUrl = `/api/proxy`;
     // Enclose in double quotes to force exact match
     const encodedTerm = encodeURIComponent(`"${term}"`);
-    const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodedTerm}&page-size=10`;
+    const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodedTerm}&page-size=10&page=${page}`;
     const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
     const response = await safeFetch(url, {
@@ -945,7 +945,12 @@ export const searchEntities = async (term: string, config: ApiConfig, logger?: L
     if (!response.ok) throw new Error(`Search failed: ${response.status}`);
 
     const data = await response.json();
-    return data.items || [];
+    return {
+        pageSize: data.pageSize || 10,
+        page: data.page || page,
+        totalItems: data.totalItems || 0,
+        items: data.items || [],
+    };
 };
 
 export const generateOrgChart = async (rootNzbn: string, config: ApiConfig, onDebug?: DebugCallback, onLog?: LoggerCallback) => {

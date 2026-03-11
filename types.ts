@@ -145,6 +145,14 @@ export interface EntitySearchResultItem {
   }>;
 }
 
+// From /entities search response (paginated wrapper)
+export interface EntitySearchResponse {
+  pageSize: number;
+  page: number;
+  totalItems: number;
+  items: EntitySearchResultItem[];
+}
+
 // From /entities/{nzbn} (FullEntity schema)
 // Updated to use "company-details" as per JSON definition
 export interface NZBNFullEntity {

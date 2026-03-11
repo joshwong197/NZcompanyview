@@ -22,7 +22,7 @@ import { getLayoutedElements } from './services/layoutService';
 import { tidyUpLayout } from './services/layoutOptimizer';
 import { generateOrgChart, searchEntities } from './services/apiService';
 import { extractDirectorsFromEntity } from './services/directorService';
-import { ApiConfig, EntitySearchResultItem, GraphSnapshot, GraphNode, GraphEdge, LogEntry, NodeType, NZBNFullEntity, PersonCompanyResult, CompanyTab, IndividualTab } from './types';
+import { ApiConfig, EntitySearchResultItem, EntitySearchResponse, GraphSnapshot, GraphNode, GraphEdge, LogEntry, NodeType, NZBNFullEntity, PersonCompanyResult, CompanyTab, IndividualTab } from './types';
 import { searchByPersonName } from './services/directorSearchService';
 import { searchDisqualifiedDirectors, DisqualifiedDirector } from './src/api/disqualifiedDirectorsApi';
 import { searchInsolvency, InsolvencyRecord } from './src/api/insolvencyApi';
@@ -74,6 +74,9 @@ function App() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<EntitySearchResultItem[]>([]);
+  const [searchTotalItems, setSearchTotalItems] = useState<number>(0);
+  const [searchCurrentPage, setSearchCurrentPage] = useState<number>(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -199,9 +202,10 @@ function App() {
     localStorage.setItem('mitsuketa_config', JSON.stringify(config));
   }, [config]);
 
-  // Persist Snapshots
+  // Persist Snapshots (person snapshots are session-only for insolvency register compliance)
   useEffect(() => {
-    localStorage.setItem('mitsuketa_snapshots', JSON.stringify(snapshots));
+    const persistable = snapshots.filter(s => s.searchType !== 'person');
+    localStorage.setItem('mitsuketa_snapshots', JSON.stringify(persistable));
   }, [snapshots]);
 
   // Search Logic (Level 1: Find Entity or Person)
@@ -217,15 +221,19 @@ function App() {
       setIsLoading(true);
       setError(null);
       setSearchResults([]);
+      setSearchTotalItems(0);
+      setSearchCurrentPage(0);
       setShowDropdown(false);
       setApiLogs([]); // Clear logs on new search
 
       try {
-        const results = await searchEntities(searchQuery, config, handleLog);
-        if (results.length === 0) {
+        const response = await searchEntities(searchQuery, config, handleLog, 0);
+        if (response.items.length === 0) {
           setError("No companies found with that name/NZBN.");
         } else {
-          setSearchResults(results);
+          setSearchResults(response.items);
+          setSearchTotalItems(response.totalItems);
+          setSearchCurrentPage(response.page);
           setShowDropdown(true);
         }
       } catch (err: any) {
@@ -233,6 +241,23 @@ function App() {
       } finally {
         setIsLoading(false);
       }
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const nextPage = searchCurrentPage + 1;
+      const response = await searchEntities(searchQuery, config, handleLog, nextPage);
+      if (response.items.length > 0) {
+        setSearchResults(prev => [...prev, ...response.items]);
+        setSearchCurrentPage(nextPage);
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to load more results.");
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -581,8 +606,7 @@ function App() {
     e.stopPropagation(); // Prevent loading the snapshot
     if (confirm('Delete this snapshot?')) {
       const updated = snapshots.filter(s => s.id !== snapshotId);
-      setSnapshots(updated);
-      localStorage.setItem('mitsuketa_snapshots', JSON.stringify(updated));
+      setSnapshots(updated); // useEffect handles localStorage persistence
     }
   };
 
@@ -726,8 +750,7 @@ function App() {
         };
 
         const updated = [newSnap, ...snapshots];
-        setSnapshots(updated);
-        localStorage.setItem('mitsuketa_snapshots', JSON.stringify(updated));
+        setSnapshots(updated); // useEffect handles localStorage persistence
 
       } catch (err) {
         console.error("Import failed", err);
@@ -742,6 +765,8 @@ function App() {
   const clearSearch = () => {
     setSearchQuery('');
     setSearchResults([]);
+    setSearchTotalItems(0);
+    setSearchCurrentPage(0);
     setShowDropdown(false);
     setError(null);
     setApiLogs([]);
@@ -1244,7 +1269,7 @@ function App() {
             {showDropdown && searchResults.length > 0 && (
               <div className="absolute top-full left-0 right-0 mx-4 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl z-50 max-h-80 overflow-y-auto">
                 <div className="sticky top-0 bg-slate-50 dark:bg-slate-900/90 backdrop-blur px-3 py-2 border-b border-slate-200 dark:border-slate-700 text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold flex justify-between items-center">
-                  <span>Matches found ({searchResults.length})</span>
+                  <span>Matches found ({searchTotalItems || searchResults.length})</span>
                   <button onClick={() => setShowDropdown(false)} className="hover:text-blue-500"><X size={12} /></button>
                 </div>
                 {searchResults.map((entity) => (
@@ -1272,6 +1297,24 @@ function App() {
                     </div>
                   </button>
                 ))}
+                {searchResults.length < searchTotalItems && (
+                  <div className="sticky bottom-0 bg-slate-50 dark:bg-slate-900/90 backdrop-blur px-3 py-2 border-t border-slate-200 dark:border-slate-700">
+                    <button
+                      onClick={handleLoadMore}
+                      disabled={isLoadingMore}
+                      className="w-full text-center text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 py-1.5 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isLoadingMore ? (
+                        <>
+                          <Loader2 className="animate-spin" size={12} />
+                          Loading...
+                        </>
+                      ) : (
+                        `Load more (showing ${searchResults.length} of ${searchTotalItems})`
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1310,7 +1353,12 @@ function App() {
                 >
                   <div onClick={() => loadSnapshot(snap)} className="cursor-pointer">
                     <p className="text-sm text-gray-700 dark:text-gray-300 font-medium truncate group-hover:text-blue-600 dark:group-hover:text-blue-300">{snap.name}</p>
-                    <p className="text-[10px] text-gray-500">{new Date(snap.dateCreated).toLocaleDateString()}</p>
+                    <p className="text-[10px] text-gray-500">
+                      {new Date(snap.dateCreated).toLocaleDateString()}
+                      {snap.searchType === 'person' && (
+                        <span className="ml-1.5 text-[9px] text-amber-600 dark:text-amber-400 font-medium">Session only</span>
+                      )}
+                    </p>
                   </div>
                   <button
                     onClick={(e) => deleteSnapshot(snap.id, e)}

@@ -110,6 +110,19 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                         </p>
                     </section>
 
+                    <section className="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-lg border-l-4 border-blue-500">
+                        <h4 className="flex items-center gap-2 text-blue-800 dark:text-blue-400 font-bold mb-2">
+                            <Info size={20} /> Individual Search Data Retention
+                        </h4>
+                        <p className="text-sm text-blue-900/80 dark:text-blue-200/80 leading-relaxed">
+                            Snapshots created from individual/person searches are stored in your browser for the current session only and are
+                            not saved between sessions. When you close or refresh the page, these snapshots are automatically
+                            cleared. This is to comply with data retention requirements for information sourced from the
+                            New Zealand Insolvency Register. You can still export individual snapshots as JSON files during
+                            your session if you need to preserve them.
+                        </p>
+                    </section>
+
                 </div>
 
                 {/* Footer */}
