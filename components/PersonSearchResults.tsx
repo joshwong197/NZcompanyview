@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { User, Building2, ArrowUpDown, Filter, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { PersonCompanyResult } from '../types';
 import { CompanyRoleCard } from './CompanyRoleCard';
@@ -30,6 +30,18 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
     const [sortMode, setSortMode] = useState<SortMode>('default');
     const [filterMode, setFilterMode] = useState<FilterMode>('all');
     const [currentPage, setCurrentPage] = useState(1);
+    const [headerVisible, setHeaderVisible] = useState(true);
+    const lastScrollY = useRef(0);
+
+    const handleResultsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const currentY = e.currentTarget.scrollTop;
+        if (currentY > lastScrollY.current + 5) {
+            setHeaderVisible(false);
+        } else if (currentY < lastScrollY.current - 5) {
+            setHeaderVisible(true);
+        }
+        lastScrollY.current = currentY;
+    };
 
     // Filter results
     const filteredResults = results.filter(r => {
@@ -98,7 +110,9 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
 
     return (
         <div id="person-search-results" className="absolute inset-0 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
-            {/* Header */}
+            {/* Header - collapses on scroll down, reappears on scroll up */}
+            <div className={`grid transition-all duration-300 ease-in-out ${headerVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+            <div className="overflow-hidden">
             <div className="p-6 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border-b border-slate-200 dark:border-slate-700">
                 <button
                     onClick={onBack}
@@ -262,6 +276,8 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                     </div>
                 </div>
             </div>
+            </div>
+            </div>
 
             {/* Controls */}
             <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 flex flex-wrap gap-3 items-center">
@@ -308,7 +324,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
             </div>
 
             {/* Results Grid */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6" onScroll={handleResultsScroll}>
                 {paginatedResults.length === 0 ? (
                     <div className="text-center py-12">
                         <Building2 className="mx-auto mb-4 text-gray-300 dark:text-gray-600" size={48} />
