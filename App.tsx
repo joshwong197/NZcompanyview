@@ -170,7 +170,17 @@ function App() {
   const [activeIndividualTabId, setActiveIndividualTabId] = useState<string | null>(null);
 
   // Sidebar State
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
+    () => window.innerWidth < 768
+  );
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   const handleLog = useCallback((entry: LogEntry) => {
     setApiLogs(prev => [...prev, entry]);
@@ -1155,16 +1165,30 @@ function App() {
         {/* Sidebar Toggle Button - positioned on the edge of the sidebar */}
         <button
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          className={`absolute top-1/2 -translate-y-1/2 z-30 p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg transition-all hover:bg-slate-50 dark:hover:bg-slate-700 ${isSidebarCollapsed ? 'left-2' : 'left-[376px]'
+          className={`absolute top-1/2 -translate-y-1/2 z-50 p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg transition-all hover:bg-slate-50 dark:hover:bg-slate-700 ${
+            isMobile
+              ? (isSidebarCollapsed ? 'left-2' : 'left-[calc(85vw-2px)]')
+              : (isSidebarCollapsed ? 'left-2' : 'left-[376px]')
             }`}
           title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
           {isSidebarCollapsed ? <ChevronRight size={16} className="text-gray-600 dark:text-gray-300" /> : <ChevronLeft size={16} className="text-gray-600 dark:text-gray-300" />}
         </button>
 
+        {/* Mobile backdrop - tap outside to close sidebar */}
+        {isMobile && !isSidebarCollapsed && (
+          <div
+            className="absolute inset-0 z-30 bg-black/40"
+            onClick={() => setIsSidebarCollapsed(true)}
+          />
+        )}
+
         {/* Sidebar */}
-        <div className={`${isSidebarCollapsed ? 'w-0' : 'w-96'
-          } bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col z-20 shadow-xl transition-all duration-300 ease-in-out overflow-hidden`}>
+        <div className={`bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-xl transition-all duration-300 ease-in-out overflow-hidden ${
+          isMobile
+            ? `absolute inset-y-0 left-0 z-40 w-[85vw] ${isSidebarCollapsed ? '-translate-x-full' : 'translate-x-0'}`
+            : `relative z-20 ${isSidebarCollapsed ? 'w-0' : 'w-96'}`
+        }`}>
 
           {/* Search Section */}
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0 relative">
