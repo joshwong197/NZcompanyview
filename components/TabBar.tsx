@@ -72,7 +72,7 @@ export const TabBar: React.FC<TabBarProps> = ({
 
             {/* Sub-tabs (scrollable row) */}
             {activeTabs.length > 0 && (
-                <div className="flex items-center gap-0.5 px-3 py-1 overflow-x-auto scrollbar-thin">
+                <div className="flex items-center gap-0.5 px-3 py-1 overflow-x-auto scrollbar-thin touch-pan-x">
                     {activeTabs.map(tab => (
                         <div
                             key={tab.id}

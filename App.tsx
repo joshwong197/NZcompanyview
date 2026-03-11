@@ -1167,7 +1167,7 @@ function App() {
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           className={`absolute top-1/2 -translate-y-1/2 z-50 p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg transition-all hover:bg-slate-50 dark:hover:bg-slate-700 ${
             isMobile
-              ? (isSidebarCollapsed ? 'left-2' : 'left-[calc(85vw-2px)]')
+              ? (isSidebarCollapsed ? 'left-2' : 'hidden')
               : (isSidebarCollapsed ? 'left-2' : 'left-[376px]')
             }`}
           title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
