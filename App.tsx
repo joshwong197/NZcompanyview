@@ -239,7 +239,7 @@ function App() {
       try {
         const response = await searchEntities(searchQuery, config, handleLog, 0);
         if (response.items.length === 0) {
-          setError("No companies found with that name/NZBN.");
+          setError("No companies found with that name, NZBN or company number.");
         } else {
           setSearchResults(response.items);
           setSearchTotalItems(response.totalItems);
@@ -1235,7 +1235,7 @@ function App() {
                 <input
                   ref={searchInputRef}
                   type="text"
-                  placeholder={searchMode === 'person' ? 'Search by director/shareholder name...' : 'Search companies by name or NZBN...'}
+                  placeholder={searchMode === 'person' ? 'Search by director/shareholder name...' : 'Search by name, NZBN or company number...'}
                   className="w-full bg-slate-100 dark:bg-slate-800 text-gray-900 dark:text-white rounded-l px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 focus:border-blue-500 focus:outline-none placeholder-slate-500 transition-colors"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -1311,6 +1311,9 @@ function App() {
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{entity.nzbn}</span>
+                        {entity.sourceRegisterUniqueId && (
+                          <span className="text-xs font-mono text-gray-400 dark:text-gray-500">#{entity.sourceRegisterUniqueId}</span>
+                        )}
                         <span className={`text-[9px] px-1.5 py-0.5 rounded-full uppercase font-bold ${entity.entityStatusDescription.toLowerCase().includes('registered')
                           ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
                           : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
