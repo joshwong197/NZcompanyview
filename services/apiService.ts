@@ -488,6 +488,9 @@ class OrgSpider {
                 ownerNode.data.isCapped = true;
                 ownerNode.data.cappedChildCount = totalHoldings;
             }
+            // Skip processing children entirely — no API calls, no node creation.
+            // User can expand on demand via right-click.
+            return;
         }
 
         for (const role of results.roles) {
